@@ -2,10 +2,9 @@
 
 #include "../other/ut/include/boost/ut.hpp"
 
-using namespace asv;
-
 int main() {
     using namespace boost::ut;
+    using namespace asv;
 
     "int"_test = [] {
         node n;
@@ -65,5 +64,3 @@ int main() {
 
     return 0;
 }
-
-}   // namespace asv
