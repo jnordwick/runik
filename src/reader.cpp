@@ -15,7 +15,7 @@ namespace asv {
 
 using std::vector;
 
-parse_error::parse_error(std::string m, int p) : runtime_error(m), pos(p) {
+parse_error::parse_error(std::string m, unsigned p) : runtime_error(m), pos(p) {
     msg  = "parse error:";
     msg += std::to_string(p);
     msg += ": ";
@@ -34,7 +34,7 @@ constexpr std::array<bool, 256> oper_table = []() {
 node::~node() {
     using enum asv::type;
 
-    switch (type) {
+    switch (typ) {
     case t_ident:
     case t_str:
     case t_sym: delete s; break;
@@ -75,9 +75,9 @@ std::ostream &operator<<(std::ostream &os, const asv::type t) {
 std::ostream &operator<<(std::ostream &os, const node &n) {
     using enum asv::type;
 
-    os << "Node<" << n.type << ">";
+    os << "Node<" << n.typ << ">";
     os << "(" << n.pos << ")[";
-    switch (n.type) {
+    switch (n.typ) {
     case t_ident:
     case t_sym:
     case t_str: os << *n.s; break;
@@ -88,7 +88,7 @@ std::ostream &operator<<(std::ostream &os, const node &n) {
     case t_bracelist:
     case t_toplevel:
     case t_expr: {
-        for (int i = 0; i < n.n->size(); ++i) {
+        for (unsigned i = 0; i < n.n->size(); ++i) {
             os << n.n->at(i);
             if (i != n.n->size() - 1) os << ",";
         }
@@ -112,17 +112,17 @@ bool is_ws(char c) { return c == ' ' || c == '\t'; }
 bool is_term(char c) { return c == ';' || c == '\n' || c == 0; }
 bool is_leftgroup(char c) { return c == '(' || c == '[' || c == '{'; }
 bool is_rightgroup(char c) { return c == '}' || c == ']' || c == ')'; }
-bool is_num(char c) { return ((unsigned int)c) - ((unsigned int)'0') < 10; }
-bool is_upper(char c) { return ((unsigned int)c) - ((unsigned int)'A') < 26; }
-bool is_lower(char c) { return ((unsigned int)c) - ((unsigned int)'a') < 26; }
+bool is_num(char c) { return ((unsigned)c) - ((unsigned)'0') < 10; }
+bool is_upper(char c) { return ((unsigned)c) - ((unsigned)'A') < 26; }
+bool is_lower(char c) { return ((unsigned)c) - ((unsigned)'a') < 26; }
 bool is_alpha(char c) { return is_upper(c) || is_lower(c); }
 bool is_ident1char(char c) { return is_alpha(c) || c == '_' || c == '.'; }
 bool is_identchar(char c) { return is_alpha(c) || is_num(c) || c == '_' || c == '.'; }
 bool is_expr_left_boundary(char c) { return is_ws(c) || is_term(c) || is_leftgroup(c); }
 
-bool inline reader::has_more(int p) { return p < (int)sv.length(); }
+bool inline reader::has_more(unsigned p) { return p < sv.length(); }
 
-int inline reader::skip_ws(int p) {
+unsigned inline reader::skip_ws(unsigned p) {
     while (p < sv.size()) {
         if (is_ws(sv[p]))
             p += 1;
@@ -132,8 +132,8 @@ int inline reader::skip_ws(int p) {
     return p;
 }
 
-int reader::parse_number(int pos, node &n) {
-    int p = pos;
+unsigned reader::parse_number(unsigned pos, node &n) {
+    unsigned p = pos;
     if (sv[p] == '-') {
         char prev = p > 0 ? sv[p - 1] : ' ';
         if (!is_expr_left_boundary(prev)) return no_parse;
@@ -147,8 +147,8 @@ int reader::parse_number(int pos, node &n) {
         throw parse_error("bad number or ident", pos);
     }
 
-    int count_dots = 0;
-    for (int i = pos; i < p; ++i) {
+    unsigned count_dots = 0;
+    for (unsigned i = pos; i < p; ++i) {
         count_dots += sv[i] == '.';
     }
     if (count_dots > 1)   // 1.2.3
@@ -176,10 +176,10 @@ int reader::parse_number(int pos, node &n) {
     return p;
 }
 
-int reader::parse_str(int pos, node &n) {
+unsigned reader::parse_str(unsigned pos, node &n) {
     if (sv[pos] != '"') return no_parse;
 
-    int p = pos + 1;
+    unsigned p = pos + 1;
     while (has_more(p)) {
         if (sv[p] == '"' && sv[p - 1] != '\\') {
             n = node(asv::type::t_str, pos, new std::string(sv, pos + 1, p - pos - 1));
@@ -190,8 +190,8 @@ int reader::parse_str(int pos, node &n) {
     throw parse_error("unterminated string", pos);
 }
 
-int reader::parse_ident(int pos, node &n) {
-    int p = pos;
+unsigned reader::parse_ident(unsigned pos, node &n) {
+    unsigned p = pos;
     if (!is_ident1char(sv[p])) return no_parse;
     while (has_more(p) && is_identchar(sv[p]))
         p += 1;
@@ -199,9 +199,9 @@ int reader::parse_ident(int pos, node &n) {
     return p;
 }
 
-int reader::parse_sym(int pos, node &n) {
+unsigned reader::parse_sym(unsigned pos, node &n) {
     if (sv[pos] != '`') return no_parse;
-    int p = pos + 1;
+    unsigned p = pos + 1;
 
     if (!has_more(p)) return no_parse;
 
@@ -211,45 +211,45 @@ int reader::parse_sym(int pos, node &n) {
         p = parse_ident(p, n);
     else
         return no_parse;
-    n.type = asv::type::t_sym;
+    n.typ = asv::type::t_sym;
     return p;
 }
 
-int reader::parse_oper(int pos, node &n) {
+unsigned reader::parse_oper(unsigned pos, node &n) {
     char c = sv[pos];
     if (!oper_table.at(static_cast<unsigned>(c))) return no_parse;
     n = node(asv::type::t_oper, pos, c);
     return pos + 1;
 }
 
-int reader::parse_term(int pos, node &n) {
+unsigned reader::parse_term(unsigned pos, node &n) {
     char c = pos >= sv.size() ? 0 : sv[pos];
     if (!(is_term(c) || is_rightgroup(c))) return no_parse;
     n = node(asv::type::t_term, pos, c);
     return pos + 1;
 }
 
-int reader::parse_func(int pos, node &n) {
-    int p = pos;
-    p     = match_next(p, "fn");
+unsigned reader::parse_func(unsigned pos, node &n) {
+    unsigned p = pos;
+    p          = match_next(p, "fn");
     if (p == no_parse) return no_parse;
 
     func *fn = new func();
 
-    p           = skip_ws(p);
-    int post_id = parse_ident(p, fn->name);
+    p                = skip_ws(p);
+    unsigned post_id = parse_ident(p, fn->name);
     // if no name, is anonymous function
     if (post_id != no_parse) p = post_id;
 
-    p           = skip_ws(p);
-    int post_fp = parse_funcparams(p, fn->params);
+    p                = skip_ws(p);
+    unsigned post_fp = parse_funcparams(p, fn->params);
     if (post_fp == no_parse)
         fn->implicit = true;
     else
         p = post_fp;
 
-    p       = skip_ws(p);
-    int ret = parse_funcbody(p, fn->body);
+    p            = skip_ws(p);
+    unsigned ret = parse_funcbody(p, fn->body);
     if (ret == no_parse) throw parse_error("expecting fn body", p);
     p = ret;
 
@@ -257,14 +257,14 @@ int reader::parse_func(int pos, node &n) {
     return p;
 }
 
-int reader::parse_funcparams(int pos, node &n) {
+unsigned reader::parse_funcparams(unsigned pos, node &n) {
     using enum asv::type;
 
     vector<node> params;
     node         bn;
-    int          p = parse_bracketlist(pos, bn);
+    unsigned     p = parse_bracketlist(pos, bn);
     if (p != no_parse) {
-        for (int i = 0; i < bn.n->size(); ++i) {
+        for (unsigned i = 0; i < bn.n->size(); ++i) {
             switch (bn.n->at(i).n->size()) {
             case 0: throw parse_error("internal error: missing parse", -1);
             case 1: throw parse_error("missing parameter", bn.n->at(i).n->at(0).pos);
@@ -272,8 +272,8 @@ int reader::parse_funcparams(int pos, node &n) {
             default: throw parse_error("extra garbage in param list", bn.n->at(i).n->at(2).pos);
             }
         }
-        for (int i = 0; i < params.size(); ++i) {
-            if (params[i].type != t_ident && params[i].type != t_term)
+        for (unsigned i = 0; i < params.size(); ++i) {
+            if (params[i].typ != t_ident && params[i].typ != t_term)
                 throw parse_error("bad type in param list", params[i].pos);
         }
         n = node(t_bracketlist, pos, new vector<node>(std::move(params)));
@@ -281,18 +281,18 @@ int reader::parse_funcparams(int pos, node &n) {
     return p;
 }
 
-int reader::parse_funcbody(int pos, node &n) { return parse_bracelist(pos, n); }
+unsigned reader::parse_funcbody(unsigned pos, node &n) { return parse_bracelist(pos, n); }
 
-int reader::match_next(int pos, std::string_view x) {
+unsigned reader::match_next(unsigned pos, std::string_view x) {
     if (sv.size() - pos < x.size()) return no_parse;
     if (sv.substr(pos, x.size()) != x) return no_parse;
-    int end = pos + x.size();
+    unsigned end = pos + x.size();
     if (is_identchar(sv[end])) return no_parse;
     return end;
 }
 
-int reader::parse_group(int pos, node &n, asv::type type, char open, char close) {
-    int p = pos;
+unsigned reader::parse_group(unsigned pos, node &n, asv::type type, char open, char close) {
+    unsigned p = pos;
     if (sv[p] != open) return no_parse;
     p += 1;
 
@@ -302,7 +302,7 @@ int reader::parse_group(int pos, node &n, asv::type type, char open, char close)
         node child;
         p = skip_ws(p);
         p = parse_expr(p, child);
-        assert(child.n->back().type == asv::type::t_term);
+        assert(child.n->back().typ == asv::type::t_term);
         char found = p == no_parse ? 0 : child.n->back().c;
         if (found == ';' || found == '\n' || found == close) {
             list->emplace_back(std::move(child));
@@ -321,25 +321,25 @@ int reader::parse_group(int pos, node &n, asv::type type, char open, char close)
     return p;
 }
 
-int reader::parse_parlist(int pos, node &n) {
+unsigned reader::parse_parlist(unsigned pos, node &n) {
     return parse_group(pos, n, asv::type::t_parlist, '(', ')');
 }
-int reader::parse_bracketlist(int pos, node &n) {
+unsigned reader::parse_bracketlist(unsigned pos, node &n) {
     return parse_group(pos, n, asv::type::t_bracketlist, '[', ']');
 }
-int reader::parse_bracelist(int pos, node &n) {
+unsigned reader::parse_bracelist(unsigned pos, node &n) {
     return parse_group(pos, n, asv::type::t_bracelist, '{', '}');
 }
 
-int reader::parse_toplevel(int pos, node &n) {
-    int           p     = skip_ws(pos);
-    int           start = p;
+unsigned reader::parse_toplevel(unsigned pos, node &n) {
+    unsigned      p     = skip_ws(pos);
+    unsigned      start = p;
     vector<node> *v     = new vector<node>();
 
     bool done = false;
     while (has_more(p) && !done) {
-        node child;
-        int  ret = no_parse;
+        node     child;
+        unsigned ret = no_parse;
 
         ret = parse_func(p, child);
         if (ret != no_parse) goto bottom;
@@ -356,17 +356,17 @@ int reader::parse_toplevel(int pos, node &n) {
     return p;
 }
 
-int reader::parse_expr(int pos, node &n) {
-    int p = skip_ws(pos);
+unsigned reader::parse_expr(unsigned pos, node &n) {
+    unsigned p = skip_ws(pos);
     if (!has_more(p)) return no_parse;
 
-    int           start = p;
+    unsigned      start = p;
     vector<node> *v     = new vector<node>();
     bool          done  = false;
 
     while (has_more(p) && !done) {
-        node child;
-        int  ret = no_parse;
+        node     child;
+        unsigned ret = no_parse;
 
         ret = parse_term(p, child);
         if (ret != no_parse) {
@@ -381,7 +381,7 @@ int reader::parse_expr(int pos, node &n) {
         if (ret != no_parse) goto bottom;
         ret = parse_func(p, child);
         if (ret != no_parse) {
-            if (child.f->name.type == asv::type::t_ident)
+            if (child.f->name.typ == asv::type::t_ident)
                 throw parse_error("Named functions only at top level", p);
             goto bottom;
         }
