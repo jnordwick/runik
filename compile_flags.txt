@@ -2,4 +2,5 @@
 -Wall
 -g
 -O0
--Iother/ut/include
+-Iexternal/ut/include
+-Isrc

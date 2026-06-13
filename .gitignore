@@ -1,4 +1,4 @@
-docs
+build
+.gdb_history
 *.a
 *.o
-.gdb_history
