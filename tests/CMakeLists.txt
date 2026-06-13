@@ -1,0 +1,5 @@
+add_executable(tests test_reader.cpp)
+target_link_libraries(tests reader)
+target_include_directories(tests PRIVATE ../other/ut/include)
+add_test(NAME tests COMMAND tests)
+enable_testing()

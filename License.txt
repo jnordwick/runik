@@ -1,0 +1,15 @@
+qopyright (C) 2026 Jason Nordwick. All rights reserved.
+
+TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION, MODIFICATION, AND USE:
+
+1. Visibility Only: This source code is made publicly visible solely for
+educational evaluation, technical review, and employment portfolio assessment.
+
+2. Prohibition on Modification and Redistribution: You may not modify, adapt,
+translate, or create derivative works based upon this software. You may not
+distribute, sublicense, or rent this software.
+
+3. Prohibition on AI and Machine Learning Training: You may not use any part of
+this source code, data, or documentation for the purpose of training,
+fine-tuning, testing, or developing artificial intelligence models, machine
+learning systems, or automated code-generation tools.
