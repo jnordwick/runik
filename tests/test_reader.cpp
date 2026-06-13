@@ -61,5 +61,11 @@ int main() {
         expect(n.n->size() == 3);
     };
 
+    "fn"_test = [] {
+        node n;
+        reader("fn func[x;y] {x+y;:x}").parse_func(0, n);
+        pretty_print(n);
+    };
+
     return 0;
 }

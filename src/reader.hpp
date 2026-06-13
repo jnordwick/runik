@@ -121,4 +121,6 @@ struct reader {
 std::ostream &operator<<(std::ostream &os, const asv::type t);
 std::ostream &operator<<(std::ostream &os, const node &n);
 
+void pretty_print(node &n, int level = 0, char const *prefix = "");
+
 }   // namespace asv

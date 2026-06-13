@@ -23,7 +23,7 @@ parse_error::parse_error(std::string m, unsigned p) : runtime_error(m), pos(p) {
 }
 
 constexpr std::array<bool, 256> oper_table = []() {
-    constexpr char        ops[] = "`+-*%<>";
+    constexpr char        ops[] = "`+-*%<>:";
     std::array<bool, 256> t{};
     for (auto c : ops)
         t[static_cast<unsigned>(c)] = true;
@@ -88,16 +88,10 @@ std::ostream &operator<<(std::ostream &os, const node &n) {
     case t_bracelist:
     case t_toplevel:
     case t_expr: {
-        for (unsigned i = 0; i < n.n->size(); ++i) {
-            os << n.n->at(i);
-            if (i != n.n->size() - 1) os << ",";
-        }
+        os << '#' << n.n->size();
         break;
     }
     case t_func: {
-        os << n.f->name << ":";
-        os << n.f->params << ":";
-        os << n.f->body << ":";
         os << n.f->implicit;
         break;
     }
@@ -403,6 +397,34 @@ unsigned reader::parse_expr(unsigned pos, node &n) {
     }
     n = node(asv::type::t_expr, start, v);
     return p;
+}
+
+void pretty_print(node &n, int level, char const *prefix) {
+    using enum asv::type;
+
+    for (int i = 0; i < level; ++i)
+        std::cout << "  ";
+
+    std::cout << prefix << n << std::endl;
+
+    switch (n.typ) {
+    case t_func: {
+        pretty_print(n.f->name, level + 1, "name: ");
+        pretty_print(n.f->params, level + 1, "params: ");
+        pretty_print(n.f->body, level + 1, "body: ");
+        break;
+    }
+    case t_expr:
+    case t_parlist:
+    case t_bracketlist:
+    case t_bracelist:
+    case t_toplevel: {
+        for (unsigned i = 0; i < n.n->size(); ++i)
+            pretty_print(n.n->at(i), level + 1);
+        break;
+    }
+    default: break;
+    }
 }
 
 }   // namespace asv
