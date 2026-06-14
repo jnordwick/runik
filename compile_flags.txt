@@ -1,5 +1,6 @@
--std=c++23
+-std=gnu++23
 -Wall
+-Wextra
 -g
 -O0
 -Iexternal/ut/include
