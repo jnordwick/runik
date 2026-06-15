@@ -7,7 +7,11 @@
 #include <utility>
 #include <vector>
 
+#include "runik.hpp"
+
 namespace asv {
+
+using namespace runik;
 
 constexpr unsigned no_parse = std::numeric_limits<unsigned>::max();
 
@@ -37,29 +41,31 @@ enum class type {
     t_str,
     t_ident,
     t_oper,
+    t_adverb,
     t_func,
     t_sym,
+    t_comment,
 };
 
 struct node {
     type     typ;
     unsigned pos;
     union {
-        double             d;
-        int64_t            i;
+        atom               a;
         std::string       *s;
         std::vector<node> *n;
         func              *f;
-        char               c;
     };
 
-    explicit node() : typ(type::t_term), pos(no_parse), c(0) {};
-    explicit node(enum type t, unsigned p, double x) : typ(t), pos(p), d(x) {}
-    explicit node(enum type t, unsigned p, int64_t x) : typ(t), pos(p), i(x) {}
+    explicit node(enum type t, unsigned p, double x) : typ(t), pos(p), a(rtype::a_f64, x) {}
+    explicit node(enum type t, unsigned p, int64_t x) : typ(t), pos(p), a(rtype::a_i64, x) {}
+    explicit node(enum type t, unsigned p, char x) : typ(t), pos(p), a(rtype::a_char, x) {}
+
     explicit node(enum type t, unsigned p, std::string *x) : typ(t), pos(p), s(x) {}
     explicit node(enum type t, unsigned p, std::vector<node> *x) : typ(t), pos(p), n(x) {}
     explicit node(enum type t, unsigned p, func *x) : typ(t), pos(p), f(x) {}
-    explicit node(enum type t, unsigned p, char x) : typ(t), pos(p), c(x) {}
+
+    explicit node() : node(type::t_term, no_parse, '\0') {}
 
     node(const node &)            = delete;
     node &operator=(const node &) = delete;
@@ -67,16 +73,15 @@ struct node {
     node(node &&other) noexcept {
         this->typ = other.typ;
         this->pos = other.pos;
-        this->f   = other.f;
+        this->a   = other.a;
         other.typ = type::t_term;
-        other.f   = nullptr;
     }
 
     node &operator=(node &&other) noexcept {
         if (this != &other) {
             std::swap(this->typ, other.typ);
             std::swap(this->pos, other.pos);
-            std::swap(this->f, other.f);
+            std::swap(this->a, other.a);
         }
         return *this;
     }
@@ -107,6 +112,7 @@ struct reader {
     unsigned parse_ident(unsigned pos, node &n);
     unsigned parse_sym(unsigned pos, node &n);
     unsigned parse_oper(unsigned pos, node &n);
+    unsigned parse_adverb(unsigned pos, node &n);
     unsigned parse_term(unsigned pos, node &n);
     unsigned parse_func(unsigned pos, node &n);
     unsigned parse_funcparams(unsigned pos, node &n);
@@ -116,6 +122,7 @@ struct reader {
     unsigned parse_bracketlist(unsigned pos, node &n);
     unsigned parse_expr(unsigned pos, node &n);
     unsigned parse_toplevel(unsigned pos, node &n);
+    unsigned parse_comment(unsigned pos, node &n);
 };
 
 std::ostream &operator<<(std::ostream &os, const asv::type t);

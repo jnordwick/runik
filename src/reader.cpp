@@ -31,12 +31,15 @@ constexpr std::array<bool, 256> oper_table = []() {
     return t;
 }();
 
+constexpr std::array<char const *, 6> adverbs = {">:", "<:", "':", "'", "/", "\\"};
+
 node::~node() {
     using enum asv::type;
 
     switch (typ) {
     case t_ident:
     case t_str:
+    case t_comment:
     case t_sym: delete s; break;
     case t_parlist:
     case t_bracketlist:
@@ -47,6 +50,7 @@ node::~node() {
     case t_term:
     case t_int:
     case t_float:
+    case t_adverb:
     case t_oper: break;
     }
 }
@@ -55,7 +59,9 @@ std::ostream &operator<<(std::ostream &os, const asv::type t) {
     using enum asv::type;
 
     switch (t) {
+    case t_comment: os << "Comment"; break;
     case t_ident: os << "Ident"; break;
+    case t_adverb: os << "Adverb"; break;
     case t_oper: os << "Oper"; break;
     case t_parlist: os << "ParList"; break;
     case t_bracketlist: os << "BracketList"; break;
@@ -80,9 +86,11 @@ std::ostream &operator<<(std::ostream &os, const node &n) {
     switch (n.typ) {
     case t_ident:
     case t_sym:
+    case t_comment:
     case t_str: os << *n.s; break;
-    case t_int: os << n.i; break;
-    case t_float: os << n.d; break;
+    case t_int: os << n.a.u_i64; break;
+    case t_float: os << n.a.u_f32; break;
+    case t_adverb: os << adverbs[n.a.u_char]; break;
     case t_parlist:
     case t_bracketlist:
     case t_bracelist:
@@ -96,7 +104,7 @@ std::ostream &operator<<(std::ostream &os, const node &n) {
         break;
     }
     case t_term:
-    case t_oper: os << n.c; break;
+    case t_oper: os << n.a.u_char; break;
     }
     os << "]";
     return os;
@@ -193,6 +201,17 @@ unsigned reader::parse_ident(unsigned pos, node &n) {
     return p;
 }
 
+unsigned reader::parse_comment(unsigned pos, node &n) {
+    if (sv[pos] != '/') return no_parse;
+    char prev = pos == 0 ? 0 : sv[pos - 1];
+    if (!is_ws(prev) && !is_term(prev)) return no_parse;
+    int p = pos + 1;
+    while (has_more(p) && p != '\n')
+        p += 1;
+    n = node(asv::type::t_comment, pos, new std::string(sv, pos, p - pos));
+    return p;
+}
+
 unsigned reader::parse_sym(unsigned pos, node &n) {
     if (sv[pos] != '`') return no_parse;
     unsigned p = pos + 1;
@@ -214,6 +233,17 @@ unsigned reader::parse_oper(unsigned pos, node &n) {
     if (!oper_table.at(static_cast<unsigned>(c))) return no_parse;
     n = node(asv::type::t_oper, pos, c);
     return pos + 1;
+}
+
+unsigned reader::parse_adverb(unsigned pos, node &n) {
+    for (unsigned i = 0; i < adverbs.size(); ++i) {
+        unsigned p = match_next(pos, adverbs[i]);
+        if (p != no_parse) {
+            n = node(asv::type::t_adverb, pos, static_cast<int64_t>(i));
+            return p;
+        }
+    }
+    return no_parse;
 }
 
 unsigned reader::parse_term(unsigned pos, node &n) {
@@ -297,7 +327,7 @@ unsigned reader::parse_group(unsigned pos, node &n, asv::type type, char open, c
         p = skip_ws(p);
         p = parse_expr(p, child);
         assert(child.n->back().typ == asv::type::t_term);
-        char found = p == no_parse ? 0 : child.n->back().c;
+        char found = p == no_parse ? 0 : child.n->back().a.u_char;
         if (found == ';' || found == '\n' || found == close) {
             list->emplace_back(std::move(child));
             if (found == close) done = true;
@@ -354,14 +384,17 @@ unsigned reader::parse_expr(unsigned pos, node &n) {
     unsigned p = skip_ws(pos);
     if (!has_more(p)) return no_parse;
 
-    unsigned      start = p;
-    vector<node> *v     = new vector<node>();
-    bool          done  = false;
+    unsigned      start  = p;
+    vector<node> *v      = new vector<node>();
+    bool          done   = false;
+    type          last_t = type::t_term;
 
     while (has_more(p) && !done) {
         node     child;
         unsigned ret = no_parse;
 
+        ret = parse_comment(p, child);
+        if (ret != no_parse) goto bottom;
         ret = parse_term(p, child);
         if (ret != no_parse) {
             done = true;
@@ -387,10 +420,15 @@ unsigned reader::parse_expr(unsigned pos, node &n) {
         if (ret != no_parse) goto bottom;
         ret = parse_ident(p, child);
         if (ret != no_parse) goto bottom;
+        if (last_t == type::t_oper || last_t == type::t_ident) {
+            ret = parse_adverb(p, child);
+            if (ret != no_parse) goto bottom;
+        }
         ret = parse_oper(p, child);
         if (ret != no_parse) goto bottom;
         throw parse_error("unknown token", p);
     bottom:
+        last_t = child.typ;
         v->emplace_back(std::move(child));
         p = ret;
         p = skip_ws(p);

@@ -8,9 +8,10 @@ int main() {
     "int"_test = [] {
         node n;
         int  p = reader("123--").parse_number(0, n);
+
         expect(p == 3);
         expect(n.typ == type::t_int);
-        expect(n.i == 123);
+        expect(n.a.u_i64 == 123);
     };
 
     "float"_test = [] {
@@ -18,7 +19,7 @@ int main() {
         int  p = reader("12.5 ").parse_number(0, n);
         expect(p == 4);
         expect(n.typ == type::t_float);
-        expect(n.d == 12.5);
+        expect(n.a.u_f64 == 12.5);
     };
 
     "str"_test = [] {
@@ -50,7 +51,7 @@ int main() {
         int  p = reader("+").parse_oper(0, n);
         expect(p == 1);
         expect(n.typ == type::t_oper);
-        expect(n.c == '+');
+        expect(n.a.u_char == '+');
     };
 
     "expr"_test = [] {
@@ -63,7 +64,7 @@ int main() {
 
     "fn"_test = [] {
         node n;
-        reader("fn func[x;y] {x+y;:x}").parse_func(0, n);
+        reader("fn func[x;y] {x+y+2;x}").parse_func(0, n);
         pretty_print(n);
     };
 

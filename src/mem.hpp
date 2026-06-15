@@ -2,71 +2,65 @@
 
 #include <cassert>
 #include <cstdlib>
-#include <cstring>
-#include <iostream>
 
-#include "r.hpp"
+#include "runik.hpp"
 
 // This is just to get going, will fill it later.
 
-struct Header {
+template <typename T>
+inline T chk_mul(T x, T y) {
+    int r;
+    if (__builtin_mul_overflow(x, y, &r)) assert(false);
+    return r;
+}
+
+namespace mem {
+
+using namespace runik;
+
+struct header {
+    header(const header &)            = default;
+    header(header &&)                 = default;
+    header &operator=(const header &) = default;
+    header &operator=(header &&)      = default;
     union {
-        Header *next;
-        Vec v;
-        Mat m;
-    };
-};
+        header *next;
+        vec     v;
+        mat     m;
+    } __attribute__((__packed__));
+} __attribute__((__packed__));
+static_assert(sizeof(header) == 32);
 
-struct Alloc {
-    static constexpr size_t initial_header_pool = 1000;
-    static constexpr size_t data_align = 64;
+inline void *alloc_raw(size_t s) {
+    assert(s % data_align == 0);
+    return ::operator new(s);
+}
 
-    Alloc() {
-        const size_t sz = initial_header_pool * sizeof(Header);
-        assert(sz % data_align == 0);
-        header_alloc = ::operator new[](sz);
-        memset(header_alloc, 0, sz);
-        header_pool = thread(header_alloc, initial_header_pool);
-    }
+inline void free_raw(void *v) { free(v); }
 
-    ~Alloc() { ::operator delete[](header_alloc); }
+inline header *alloc_header() { return (header *)alloc_raw(sizeof(header)); }
 
-    Header *alloc_header() {
-        if (header_pool == nullptr) {
-            std::cerr << "oom\n";
-            std::abort();
-        }
+inline void free_header(header *h) { ::operator delete((void *)h); }
 
-        Header *h = header_pool;
-        header_pool = h->next;
-        return h;
-    }
+template <typename T>
+inline void *alloc_data(size_t n) {
+    size_t r = chk_mul(n, sizeof(T));
+    return alloc_raw(r);
+}
 
-    void free_header(Header *h) {
-        h->next = header_pool;
-        header_pool = h;
-    }
+template <typename T>
+inline vec *allocv(size_t n) {
+    uint64_t r = chk_mul(n, sizeof(T));
+    vec     *v = &alloc_header()->v;
+    v->data    = alloc_data<T>(n);
+    v->cap     = r;
+    v->len     = n;
+    return v;
+}
 
-    template <typename T> T *alloc_data(size_t sz) {
-        return static_cast<T *>(alloc_data_(sizeof(T), sz));
-    }
+inline void freev(vec *v) {
+    free_raw(v->data);
+    free_raw(v);
+}
 
-    void *alloc_data_(size_t nmem, size_t sz) {
-        return std::aligned_alloc(data_align, nmem * sz);
-    }
-
-    void free_data(void *d) { std::free(d); }
-
-    Header *thread(void *mem, int n) {
-        Header *last = nullptr;
-        Header *h = static_cast<Header *>(mem);
-        for (int i = 0; i < n; ++i) {
-            h[i].next = last;
-            last = h + i;
-        }
-        return last;
-    }
-
-    void *header_alloc;
-    Header *header_pool;
-};
+};   // namespace mem
