@@ -2,33 +2,32 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <cstring>
 
 #include "runik.hpp"
 
 // This is just to get going, will fill it later.
 
-template <typename T>
-inline T chk_mul(T x, T y) {
-    int r;
+inline size_t chk_mul(size_t x, size_t y) {
+    size_t r;
     if (__builtin_mul_overflow(x, y, &r)) assert(false);
     return r;
 }
+using namespace runik;
 
 namespace mem {
 
-using namespace runik;
-
 struct header {
-    header(const header &)            = default;
-    header(header &&)                 = default;
-    header &operator=(const header &) = default;
-    header &operator=(header &&)      = default;
+    // header(const header &)            = default;
+    // header(header &&)                 = default;
+    // header &operator=(const header &) = default;
+    // header &operator=(header &&)      = default;
     union {
         header *next;
         vec     v;
         mat     m;
-    } __attribute__((__packed__));
-} __attribute__((__packed__));
+    } pack_align(32);
+} pack_align(32);
 static_assert(sizeof(header) == 32);
 
 inline void *alloc_raw(size_t s) {
@@ -38,23 +37,21 @@ inline void *alloc_raw(size_t s) {
 
 inline void free_raw(void *v) { free(v); }
 
-inline header *alloc_header() { return (header *)alloc_raw(sizeof(header)); }
+inline header *alloc_header() {
+    header *h = (header *)alloc_raw(sizeof(header));
+    std::memset(h, 0, sizeof(header));
+    return h;
+}
 
 inline void free_header(header *h) { ::operator delete((void *)h); }
 
-template <typename T>
-inline void *alloc_data(size_t n) {
-    size_t r = chk_mul(n, sizeof(T));
-    return alloc_raw(r);
-}
+inline void *alloc_data(size_t s) { return alloc_raw(s); }
 
-template <typename T>
-inline vec *allocv(size_t n) {
-    uint64_t r = chk_mul(n, sizeof(T));
-    vec     *v = &alloc_header()->v;
-    v->data    = alloc_data<T>(n);
-    v->cap     = r;
-    v->len     = n;
+inline vec *allocv(size_t n, size_t s) {
+    uint64_t r = chk_mul(n, s);
+    assert(r % block_size == 0);
+    vec *v  = &alloc_header()->v;
+    v->data = alloc_data(r);
     return v;
 }
 
