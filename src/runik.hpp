@@ -2,7 +2,7 @@
 
 #include <cassert>
 #include <cstdint>
-#include <memory>
+#include <memory>   // IWYU pragma: keep
 #include <stdfloat>
 
 #define pack_align(x) __attribute__((__packed__, __aligned__(x)))
@@ -193,7 +193,16 @@ struct vec {
         return static_cast<T const *>(data)[x];
     }
 
-    static vec *vec_make(rtype t, uint64_t n, uint32_t r = 0);
+    static vec *make(rtype t, uint64_t n, uint32_t ref = 0);
+    static vec *make(vec *old, uint64_t extra);
+    static void unmake(vec *v);
+
+    __attribute__((__cold__)) void grow(uint64_t new_cap);
+
+    void ensure(uint64_t x) {
+        if (x > cap) grow(x);
+    }
+    void more(uint64_t x) { ensure(len + x); }
 
     vec *uref() {
         ref += 1;
@@ -202,13 +211,9 @@ struct vec {
 
     void dref() {
         if (ref > 0) {
-            if (--ref == 0) {
-                vec_free(this);
-            }
+            if (--ref == 0) unmake(this);
         }
     }
-
-    void vec_free(vec *v);
 
    private:
     vec() {}

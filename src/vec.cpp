@@ -1,28 +1,54 @@
+#include <cstring>
+
 #include "mem.hpp"
 #include "runik.hpp"
 
 namespace runik {
 
-vec *vec::vec_make(rtype t, uint64_t n, uint32_t r) {
+vec *vec::make(rtype t, uint64_t n, uint32_t ref) {
     assert(t.is_vec());
     assert(n > 0);
     uint64_t u = block_round_up(t, n);
     vec     *v = mem::allocv(u, t.size_class());
     v->type    = t;
     v->attr    = vattr::none;
-    v->ref     = r;
+    v->ref     = ref;
     v->cap     = u;
     v->len     = n;
     return v;
 }
 
-void vec::vec_free(vec *v) {
+vec *vec::make(vec *old, uint64_t extra) {
+    vec *v = make(old->type, old->len + extra);
+    std::memcpy(v->data, old->data, old->len * old->type.size_class());
+    v->attr = old->attr;
+    return v;
+}
+
+void vec::unmake(vec *v) {
     if (v->type == rtype::v_gen) {
         for (uint64_t i = 0; i < v->len; ++i) {
             atom &a = v->get<atom>(i);
             if (a.type == rtype::a_gen) a.u_rune->dref();
         }
     }
+}
+
+__attribute__((__cold__)) void vec::grow(uint64_t new_cap) {
+    assert(ref < 2);
+    assert(new_cap > cap);
+    assert(cap >= block_size);
+
+    // XXX fix overflow
+    uint64_t c = cap;
+    while (c < new_cap)
+        c = (c / 2) * 3;
+    new_cap = block_round_up(type, c);
+    void *d = mem::alloc_data(new_cap);
+    std::memcpy(d, data, len * type.size_class());
+    mem::free_raw(data);
+    data = d;
+    cap  = new_cap;
 }
 
 }   // namespace runik
