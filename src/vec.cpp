@@ -1,4 +1,5 @@
 #include <cstring>
+#include <vector>
 
 #include "mem.hpp"
 #include "runik.hpp"
@@ -20,7 +21,7 @@ vec *vec::make(rtype t, uint64_t n, uint32_t ref) {
 
 vec *vec::make(vec *old, uint64_t extra) {
     vec *v = make(old->type, old->len + extra);
-    std::memcpy(v->data, old->data, old->len * old->type.size_class());
+    std::memcpy(v->v_void, old->v_void, old->len * old->type.size_class());
     v->attr = old->attr;
     return v;
 }
@@ -28,8 +29,8 @@ vec *vec::make(vec *old, uint64_t extra) {
 void vec::unmake(vec *v) {
     if (v->type == rtype::v_gen) {
         for (uint64_t i = 0; i < v->len; ++i) {
-            atom &a = v->get<atom>(i);
-            if (a.type == rtype::a_gen) a.u_rune->dref();
+            atom *a = v->v_atom;
+            if (a->type == rtype::a_gen) a->a_rune->dref();
         }
     }
 }
@@ -45,10 +46,18 @@ __attribute__((__cold__)) void vec::grow(uint64_t new_cap) {
         c = (c / 2) * 3;
     new_cap = block_round_up(type, c);
     void *d = mem::alloc_data(new_cap);
-    std::memcpy(d, data, len * type.size_class());
-    mem::free_raw(data);
-    data = d;
-    cap  = new_cap;
+    std::memcpy(d, v_void, len * type.size_class());
+    mem::free_raw(v_void);
+    v_void = d;
+    cap    = new_cap;
+}
+
+vec *vec::from(rtype t, void *p, size_t nmem) {
+    vec *v = make(t, nmem);
+    std::memcpy(v->v_void, p, nmem * v->type.size_class());
+    v->len  = nmem;
+    v->attr = nmem == 1 ? vattr::strict : vattr::none;
+    return v;
 }
 
 }   // namespace runik

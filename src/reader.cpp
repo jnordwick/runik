@@ -31,7 +31,7 @@ constexpr std::array<bool, 256> oper_table = []() {
     return t;
 }();
 
-constexpr std::array<char const *, 6> adverbs = {">:", "<:", "':", "'", "/", "\\"};
+constexpr std::array<char const *, 4> adverbs = {"':", "/", "\\", "'"};
 
 node::~node() {
     using enum asv::type;
@@ -88,9 +88,9 @@ std::ostream &operator<<(std::ostream &os, const node &n) {
     case t_sym:
     case t_comment:
     case t_str: os << *n.s; break;
-    case t_int: os << n.a.u_i64; break;
-    case t_float: os << n.a.u_f32; break;
-    case t_adverb: os << adverbs[n.a.u_char]; break;
+    case t_int: os << n.a.a_i64; break;
+    case t_float: os << n.a.a_f32; break;
+    case t_adverb: os << adverbs[n.a.a_char]; break;
     case t_parlist:
     case t_bracketlist:
     case t_bracelist:
@@ -104,7 +104,7 @@ std::ostream &operator<<(std::ostream &os, const node &n) {
         break;
     }
     case t_term:
-    case t_oper: os << n.a.u_char; break;
+    case t_oper: os << n.a.a_char; break;
     }
     os << "]";
     return os;
@@ -327,7 +327,7 @@ unsigned reader::parse_group(unsigned pos, node &n, asv::type type, char open, c
         p = skip_ws(p);
         p = parse_expr(p, child);
         assert(child.n->back().typ == asv::type::t_term);
-        char found = p == no_parse ? 0 : child.n->back().a.u_char;
+        char found = p == no_parse ? 0 : child.n->back().a.a_char;
         if (found == ';' || found == '\n' || found == close) {
             list->emplace_back(std::move(child));
             if (found == close) done = true;

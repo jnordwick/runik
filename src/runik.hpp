@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>   // IWYU pragma: keep
 #include <stdfloat>
+#include <vector>
 
 #define pack_align(x) __attribute__((__packed__, __aligned__(x)))
 #define vec_align(x)  std::assume_aligned<data_align>(x)
@@ -108,43 +109,43 @@ struct atom {
     uint8_t pad_[7] = {};
 
     union {
-        rune      *u_rune;
-        sym        u_sym;
-        nano       u_nano;
-        bit        u_bit;
-        int8_t     u_i8;
-        int16_t    u_i16;
-        int32_t    u_i32;
-        int64_t    u_i64;
-        uint8_t    u_char;
-        uint8_t    u_u8;
-        uint16_t   u_u16;
-        uint32_t   u_u32;
-        uint64_t   u_u64;
-        bfloat16_t u_bf16;
-        float16_t  u_f16;
-        float      u_f32;
-        double     u_f64;
+        rune      *a_rune;
+        sym        a_sym;
+        nano       a_nano;
+        bit        a_bit;
+        int8_t     a_i8;
+        int16_t    a_i16;
+        int32_t    a_i32;
+        int64_t    a_i64;
+        uint8_t    a_char;
+        uint8_t    a_u8;
+        uint16_t   a_u16;
+        uint32_t   a_u32;
+        uint64_t   a_u64;
+        bfloat16_t a_bf16;
+        float16_t  a_f16;
+        float      a_f32;
+        double     a_f64;
     } pack_align(8);
 
     // sometimes atoms can have non-atomic values when in general lists
     // this so each atom only needs 16 bytes per entry, not sizeof(vec)
-    atom(rtype t, rune *x) : type(t), u_rune(x) {}
+    atom(rtype t, rune *x) : type(t), a_rune(x) {}
 
-    atom(rtype t, int64_t x) : type(t), u_i64(x) {}
+    atom(rtype t, int64_t x) : type(t), a_i64(x) {}
     atom(rtype t, int32_t x) : atom(t, static_cast<int64_t>(x)) {}
     atom(rtype t, int16_t x) : atom(t, static_cast<int64_t>(x)) {}
     atom(rtype t, int8_t x) : atom(t, static_cast<int64_t>(x)) {}
 
-    atom(rtype t, uint64_t x) : type(t), u_u64(x) {}
+    atom(rtype t, uint64_t x) : type(t), a_u64(x) {}
     atom(rtype t, uint32_t x) : atom(t, static_cast<uint64_t>(x)) {}
     atom(rtype t, uint16_t x) : atom(t, static_cast<uint64_t>(x)) {}
     atom(rtype t, uint8_t x) : atom(t, static_cast<uint64_t>(x)) {}
 
-    atom(rtype t, double x) : atom(t, 0) { u_f64 = x; }
-    atom(rtype t, float x) : atom(t, 0) { u_f32 = x; }
-    atom(rtype t, float16_t x) : atom(t, 0) { u_f16 = x; }
-    atom(rtype t, bfloat16_t x) : atom(t, 0) { u_bf16 = x; }
+    atom(rtype t, double x) : atom(t, 0) { a_f64 = x; }
+    atom(rtype t, float x) : atom(t, 0) { a_f32 = x; }
+    atom(rtype t, float16_t x) : atom(t, 0) { a_f16 = x; }
+    atom(rtype t, bfloat16_t x) : atom(t, 0) { a_bf16 = x; }
 
     atom(rtype t, sym x) : atom(t, x.to_int()) {}
     atom(rtype t, nano x) : atom(t, x.to_int()) {}
@@ -181,21 +182,41 @@ struct vec {
     uint8_t  pad2_[2];
     uint64_t cap;
     uint64_t len;
-    void    *data;
+    union {
+        void       *v_void;
+        atom       *v_atom;
+        sym        *v_sym;
+        nano       *v_nano;
+        bit        *v_bit;
+        int8_t     *a_i8;
+        int16_t    *v_i16;
+        int32_t    *v_i32;
+        int64_t    *v_i64;
+        uint8_t    *v_char;
+        uint8_t    *v_u8;
+        uint16_t   *v_u16;
+        uint32_t   *v_u32;
+        uint64_t   *v_u64;
+        bfloat16_t *v_bf16;
+        float16_t  *v_f16;
+        float      *v_f32;
+        double     *v_f64;
+    } pack_align(8);
 
     template <typename T>
     T &get(uint64_t x = 0) {
-        return static_cast<T *>(data)[x];
+        return static_cast<T *>(v_void)[x];
     }
 
     template <typename T>
     T const &get(uint64_t x = 0) const {
-        return static_cast<T const *>(data)[x];
+        return static_cast<T const *>(v_void)[x];
     }
 
     static vec *make(rtype t, uint64_t n, uint32_t ref = 0);
     static vec *make(vec *old, uint64_t extra);
     static void unmake(vec *v);
+    static vec *from(rtype t, void *v, size_t nmem);
 
     __attribute__((__cold__)) void grow(uint64_t new_cap);
 

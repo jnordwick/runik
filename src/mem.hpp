@@ -50,13 +50,13 @@ inline void *alloc_data(size_t s) { return alloc_raw(s); }
 inline vec *allocv(size_t n, size_t s) {
     uint64_t r = chk_mul(n, s);
     assert(r % block_size == 0);
-    vec *v  = &alloc_header()->v;
-    v->data = alloc_data(r);
+    vec *v    = &alloc_header()->v;
+    v->v_void = alloc_data(r);
     return v;
 }
 
 inline void freev(vec *v) {
-    free_raw(v->data);
+    free_raw(v->v_void);
     free_raw(v);
 }
 

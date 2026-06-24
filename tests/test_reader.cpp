@@ -11,7 +11,7 @@ int main() {
 
         expect(p == 3);
         expect(n.typ == type::t_int);
-        expect(n.a.u_i64 == 123);
+        expect(n.a.a_i64 == 123);
     };
 
     "float"_test = [] {
@@ -19,7 +19,7 @@ int main() {
         int  p = reader("12.5 ").parse_number(0, n);
         expect(p == 4);
         expect(n.typ == type::t_float);
-        expect(n.a.u_f64 == 12.5);
+        expect(n.a.a_f64 == 12.5);
     };
 
     "str"_test = [] {
@@ -51,7 +51,7 @@ int main() {
         int  p = reader("+").parse_oper(0, n);
         expect(p == 1);
         expect(n.typ == type::t_oper);
-        expect(n.a.u_char == '+');
+        expect(n.a.a_char == '+');
     };
 
     "expr"_test = [] {
