@@ -65,7 +65,7 @@ int main() {
     "fn"_test = [] {
         node n;
         std::cout << "testing toplevel" << std::endl;
-        int r = reader("fn func[x;y] {t:x+y+2;ret t} 3+/func[4;]'5").parse_toplevel(0, n);
+        int r = reader("fn func[x;y] {t:x+y+2;ret t} 3+/func[4;]'5 6 7").parse_toplevel(0, n);
         std::cout << "r = " << r << std::endl;
         pretty_print(n);
     };

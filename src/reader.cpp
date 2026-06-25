@@ -137,46 +137,155 @@ unsigned inline reader::skip_ws(unsigned p) {
 }
 
 unsigned reader::parse_number(unsigned pos, node &n) {
-    unsigned p = pos;
-    if (sv[p] == '-') {
-        char prev = p > 0 ? sv[p - 1] : ' ';
-        if (!is_expr_left_boundary(prev)) return no_parse;
+    assert(pos < sv.size());
+
+    unsigned p         = pos;
+    int      dot_count = 0;
+    vector<char> clean;
+
+    if(sv[p] == '-') {
+        clean.push_back('-');
         p += 1;
     }
-    if (p >= sv.size() || !is_num(sv[p])) return no_parse;
 
-    while (has_more(p) && (is_num(sv[p]) || sv[p] == '.'))
-        p += 1;
-    if (has_more(p) && is_alpha(sv[p])) {   // 123abc
-        throw parse_error("bad number or ident", pos);
+    if(p >= sv.size() || !is_num(sv[p]))
+        return no_parse;
+
+    while (p < sv.size()) {
+        char c = sv[p];
+        if (is_num(c)) {
+            clean.push_back(c);
+            p++;
+        } else if (c == '.') {
+            dot_count++;
+            clean.push_back(c);
+            p++;
+        } else if (c == '_') {
+            p++;  // skip; don't store
+        } else {
+            break;
+        }
     }
 
-    unsigned count_dots = 0;
-    for (unsigned i = pos; i < p; ++i) {
-        count_dots += sv[i] == '.';
-    }
-    if (count_dots > 1)   // 1.2.3
-        throw parse_error("bad number format", pos);
-    if (sv[p - 1] == '.')   // 12.
+    if (dot_count > 1)
+        throw parse_error("too many dots in number", pos);
+    if (*clean.end() == '.')
         throw parse_error("bad number format", pos);
 
-    std::from_chars_result fcres;
-    if (count_dots == 1) {
-        double d;
-        fcres = std::from_chars(sv.data() + pos, sv.data() + p, d);
-        n     = node(asv::type::t_float, pos, d);
+    // Default type inferred from shape of literal
+    rtype::t typ = dot_count == 1 ? rtype::a_f64 : rtype::a_i64;
+
+    std::string_view trail = sv.substr(p);
+    if (p < sv.size() && is_alpha(sv[p])) {
+        struct Suf { std::string_view s; rtype::t t; };
+        // Longer entries first so "bf16" beats a hypothetical "b" prefix.
+        static constexpr Suf suffixes[] = {
+            {"bf16", rtype::a_bf16},
+            {"f64",  rtype::a_f64 },
+            {"f32",  rtype::a_f32 },
+            {"f16",  rtype::a_f16 },
+            {"i64",  rtype::a_i64 },
+            {"i32",  rtype::a_i32 },
+            {"i16",  rtype::a_i16 },
+            {"i8",   rtype::a_i8  },
+        };
+
+        for (auto &[s, t] : suffixes) {
+            if(!trail.starts_with(s)) continue;
+            typ     = t;
+            p       += s.size();
+            break;
+        }
+        if(p < sv.size() && is_identchar(sv[p]))
+            throw parse_error("unknown number type suffix", pos);
     }
-    else {
-        int64_t i;
-        fcres = std::from_chars(sv.data() + pos, sv.data() + p, i);
-        n     = node(asv::type::t_int, pos, i);
+
+    // Catch e.g. 12.5_i32 — truncation vs. error is a design call
+    bool is_float_type = (typ == rtype::a_f16  || typ == rtype::a_f32 ||
+                          typ == rtype::a_f64  || typ == rtype::a_bf16);
+    if (dot_count == 1 && !is_float_type)
+        throw parse_error("decimal literal with integer suffix", pos);
+
+    // Wrap from_chars error codes into throws
+    auto chk = [&](std::errc ec, const char *name) {
+        if (ec == std::errc::invalid_argument)
+            throw parse_error(std::string("bad ") + name + " literal", pos);
+        if (ec == std::errc::result_out_of_range)
+            throw parse_error(std::string(name) + " overflow", pos);
+    };
+
+    switch (typ) {
+    case rtype::a_i8: {
+        int val;
+        chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "i8");
+        if (val > 127 || val < -128)
+            throw parse_error("i8 overflow", pos);
+        n.typ = type::t_int;
+        n.pos = pos;
+        n.a = atom(rtype::a_i8, static_cast<int8_t>(val));
+        break;
     }
-    if (fcres.ec == std::errc::invalid_argument) {
-        throw parse_error("bad number format", pos);
+    case rtype::a_i16: {
+        int16_t val;
+        chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "i16");
+        n.typ = type::t_int;
+        n.pos = pos;
+        n.a = atom(rtype::a_i16, val);
+        break;
     }
-    else if (fcres.ec == std::errc::result_out_of_range) {
-        throw parse_error("number overflow", pos);
+    case rtype::a_i32: {
+        int32_t val;
+        chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "i32");
+        n.typ = type::t_int;
+        n.pos = pos;
+        n.a = atom(rtype::a_i32, val);
+        break;
     }
+    case rtype::a_i64: {
+        int64_t val;
+        chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "i64");
+        n.typ = type::t_int;
+        n.pos = pos;
+        n.a = atom(rtype::a_i64, val);
+        break;
+    }
+    case rtype::a_f32: {
+        float val;
+        chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "f32");
+        n.typ = type::t_float;
+        n.pos = pos;
+        n.a = atom(rtype::a_f32, val);
+        break;
+    }
+    case rtype::a_f64: {
+        double val;
+        chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "f64");
+        n.typ = type::t_float;
+        n.pos = pos;
+        n.a = atom(rtype::a_f64, val);
+        break;
+    }
+    case rtype::a_f16: {
+        // No from_chars overload for _Float16; parse as double then narrow.
+        double val;
+        chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "f16");
+        n.typ = type::t_float;
+        n.pos = pos;
+        n.a = atom(rtype::a_f16, static_cast<float16_t>(val));
+        break;
+    }
+    case rtype::a_bf16: {
+        double val;
+        chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "bf16");
+        n.typ = type::t_float;
+        n.pos = pos;
+        n.a = atom(rtype::a_bf16, static_cast<bfloat16_t>(val));
+        break;
+    }
+    default:
+        assert(false);  // unreachable: typ is always set to a valid atom rtype above
+    }
+
     return p;
 }
 
@@ -238,14 +347,12 @@ unsigned reader::parse_oper(unsigned pos, node &n) {
 }
 
 unsigned reader::parse_adverb(unsigned pos, node &n) {
-    std::cout << " -- calling parse_adverb at pos " << pos << std::endl;
     auto sv_pos = sv.substr(pos);
     for (unsigned i = 0; i < adverbs.size(); ++i) {
         if (!sv_pos.starts_with(adverbs[i])) continue;
         n = node(asv::type::t_adverb, pos, static_cast<int64_t>(i));
         return pos + adverbs[i].size();
     }
-    std::cout << "no adverb found at pos " << pos << std::endl;
     return no_parse;
 }
 
@@ -428,7 +535,6 @@ unsigned reader::parse_expr(unsigned pos, node &n) {
         if (ret != no_parse) goto bottom;
         throw parse_error("unknown token", p);
     bottom:
-        std::cout << "found " << p << " : " << child << std::endl;
         v->emplace_back(std::move(child));
         p = ret;
         p = skip_ws(p);

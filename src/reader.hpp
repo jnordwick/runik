@@ -57,6 +57,8 @@ struct node {
         func              *f;
     };
 
+    explicit node(enum type t, unsigned p, double x, rtype rt) : typ(t), pos(p), a(rt, x) {}
+    explicit node(enum type t, unsigned p, int64_t x, rtype rt) : typ(t), pos(p), a(rt, x) {}
     explicit node(enum type t, unsigned p, double x) : typ(t), pos(p), a(rtype::a_f64, x) {}
     explicit node(enum type t, unsigned p, int64_t x) : typ(t), pos(p), a(rtype::a_i64, x) {}
     explicit node(enum type t, unsigned p, char x) : typ(t), pos(p), a(rtype::a_char, x) {}
