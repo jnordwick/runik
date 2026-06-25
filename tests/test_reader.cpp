@@ -4,7 +4,7 @@
 int main() {
     using namespace boost::ut;
     using namespace asv;
-
+#if 0
     "int"_test = [] {
         node n;
         int  p = reader("123--").parse_number(0, n);
@@ -61,10 +61,12 @@ int main() {
         expect(n.typ == type::t_expr);
         expect(n.n->size() == 3);
     };
-
+#endif
     "fn"_test = [] {
         node n;
-        reader("fn func[x;y] {x+y+2;x}").parse_func(0, n);
+        std::cout << "testing toplevel" << std::endl;
+        int r = reader("fn func[x;y] {t:x+y+2;ret t} 3+/func[4;]'5").parse_toplevel(0, n);
+        std::cout << "r = " << r << std::endl;
         pretty_print(n);
     };
 

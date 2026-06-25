@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <memory>   // IWYU pragma: keep
 #include <stdfloat>
-#include <vector>
+//#include <vector>
 
 #define pack_align(x) __attribute__((__packed__, __aligned__(x)))
 #define vec_align(x)  std::assume_aligned<data_align>(x)

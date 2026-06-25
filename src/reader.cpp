@@ -7,8 +7,9 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
-#include <string_view>
+
 #include <utility>
+#include <string_view>
 #include <vector>
 
 namespace asv {
@@ -31,7 +32,7 @@ constexpr std::array<bool, 256> oper_table = []() {
     return t;
 }();
 
-constexpr std::array<char const *, 4> adverbs = {"':", "/", "\\", "'"};
+constexpr std::array<std::string_view, 4> adverbs = {"':", "/", "\\", "'"};
 
 node::~node() {
     using enum asv::type;
@@ -50,6 +51,7 @@ node::~node() {
     case t_term:
     case t_int:
     case t_float:
+
     case t_adverb:
     case t_oper: break;
     }
@@ -236,13 +238,14 @@ unsigned reader::parse_oper(unsigned pos, node &n) {
 }
 
 unsigned reader::parse_adverb(unsigned pos, node &n) {
+    std::cout << " -- calling parse_adverb at pos " << pos << std::endl;
+    auto sv_pos = sv.substr(pos);
     for (unsigned i = 0; i < adverbs.size(); ++i) {
-        unsigned p = match_next(pos, adverbs[i]);
-        if (p != no_parse) {
-            n = node(asv::type::t_adverb, pos, static_cast<int64_t>(i));
-            return p;
-        }
+        if (!sv_pos.starts_with(adverbs[i])) continue;
+        n = node(asv::type::t_adverb, pos, static_cast<int64_t>(i));
+        return pos + adverbs[i].size();
     }
+    std::cout << "no adverb found at pos " << pos << std::endl;
     return no_parse;
 }
 
@@ -387,7 +390,6 @@ unsigned reader::parse_expr(unsigned pos, node &n) {
     unsigned      start  = p;
     vector<node> *v      = new vector<node>();
     bool          done   = false;
-    type          last_t = type::t_term;
 
     while (has_more(p) && !done) {
         node     child;
@@ -420,15 +422,13 @@ unsigned reader::parse_expr(unsigned pos, node &n) {
         if (ret != no_parse) goto bottom;
         ret = parse_ident(p, child);
         if (ret != no_parse) goto bottom;
-        if (last_t == type::t_oper || last_t == type::t_ident) {
             ret = parse_adverb(p, child);
             if (ret != no_parse) goto bottom;
-        }
         ret = parse_oper(p, child);
         if (ret != no_parse) goto bottom;
         throw parse_error("unknown token", p);
     bottom:
-        last_t = child.typ;
+        std::cout << "found " << p << " : " << child << std::endl;
         v->emplace_back(std::move(child));
         p = ret;
         p = skip_ws(p);
