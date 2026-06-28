@@ -4,15 +4,15 @@
 #include <cstdint>
 #include <memory>   // IWYU pragma: keep
 #include <stdfloat>
-//#include <vector>
+#include <cstring>
 
 #define pack_align(x) __attribute__((__packed__, __aligned__(x)))
 #define vec_align(x)  std::assume_aligned<data_align>(x)
 
 namespace runik {
 
-static constexpr size_t data_align = 64;
-static constexpr size_t block_size = 64;
+static constexpr size_t data_align = 32;
+static constexpr size_t block_size = 32;
 
 using float16_t  = _Float16;
 using bfloat16_t = __bf16;
@@ -34,9 +34,9 @@ struct rtype {
         a_i32   = 7, v_i32  = 7 | 0x80,
         a_i64   = 8, v_i64  = 8 | 0x80,
         a_f16   = 9, v_f16  = 9 | 0x80,
-        a_f32   = 10, v_f32  = 10 | 0x80,
-        a_f64   = 11, v_f64  = 11 | 0x80,
-        a_bf16  = 12, v_bf16 = 12 | 0x80
+        a_bf16  = 10, v_bf16 = 10 | 0x80,
+        a_f32   = 11, v_f32  = 11 | 0x80,
+        a_f64   = 12, v_f64  = 12 | 0x80,
     };
     // clang-format on
 
@@ -47,7 +47,7 @@ struct rtype {
     rtype(uint8_t x) : v(static_cast<rtype::t>(x)) {}
     uint32_t to_int() { return static_cast<uint32_t>(v); }
 
-    bool operator==(const t &x) { return this->v == x; }
+    auto operator<=> (const rtype &x) const = default;
 
     rtype to_atom() { return v & ~0xc0; }
     rtype to_vec() { return to_atom().to_int() | 0x80; }
@@ -213,12 +213,19 @@ struct vec {
         return static_cast<T const *>(v_void)[x];
     }
 
+    char* head() {
+        return static_cast<char *>(v_void);
+    }
+
+    char* tail() {
+        return head() + len * type.size_class();
+    }
+
     static vec *make(rtype t, uint64_t n, uint32_t ref = 0);
     static vec *make(vec *old, uint64_t extra);
     static void unmake(vec *v);
     static vec *from(rtype t, void *v, size_t nmem);
 
-    __attribute__((__cold__)) void grow(uint64_t new_cap);
 
     void ensure(uint64_t x) {
         if (x > cap) grow(x);
@@ -236,8 +243,16 @@ struct vec {
         }
     }
 
+    void append(void *dat, uint64_t s=1) {
+        more(s);
+        std::memcpy(tail(), dat, s * type.size_class());
+        len += s;
+    }
+
    private:
+     __attribute__((__cold__)) void grow(uint64_t new_cap);
     vec() {}
+
 } pack_align(8);
 static_assert(sizeof(vec) == 32);
 
@@ -250,7 +265,7 @@ struct rune {
 
     rtype type() { return t; }
 
-    // only ever rederence this by a pointe
+    // only ever rederence this by a pointer
     rune()             = delete;
     ~rune()            = delete;
     rune(rune const &) = delete;

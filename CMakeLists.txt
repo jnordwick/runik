@@ -9,6 +9,7 @@ add_compile_options(-Wall -Wextra -g -O0)
 
 add_library(runik_lib
     src/reader.cpp
+    src/vec.cpp
 )
 target_include_directories(runik_lib PUBLIC src)
 

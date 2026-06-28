@@ -11,6 +11,7 @@
 #include <utility>
 #include <string_view>
 #include <vector>
+#include "runik.hpp"
 
 namespace asv {
 
@@ -35,9 +36,9 @@ constexpr std::array<bool, 256> oper_table = []() {
 constexpr std::array<std::string_view, 4> adverbs = {"':", "/", "\\", "'"};
 
 node::~node() {
-    using enum asv::type;
+    using enum asv::ntype;
 
-    switch (typ) {
+    switch (type) {
     case t_ident:
     case t_str:
     case t_comment:
@@ -49,16 +50,14 @@ node::~node() {
     case t_expr: delete n; break;
     case t_func: delete f; break;
     case t_term:
-    case t_int:
-    case t_float:
-
-    case t_adverb:
+    case t_number:
+     case t_adverb:
     case t_oper: break;
     }
 }
 
-std::ostream &operator<<(std::ostream &os, const asv::type t) {
-    using enum asv::type;
+std::ostream &operator<<(std::ostream &os, const asv::ntype t) {
+    using enum asv::ntype;
 
     switch (t) {
     case t_comment: os << "Comment"; break;
@@ -71,8 +70,7 @@ std::ostream &operator<<(std::ostream &os, const asv::type t) {
     case t_toplevel: os << "TopLevel"; break;
     case t_expr: os << "Expr"; break;
     case t_func: os << "Func"; break;
-    case t_float: os << "Float"; break;
-    case t_int: os << "Int"; break;
+    case t_number: os << "Number"; break;
     case t_str: os << "Str"; break;
     case t_term: os << "Term"; break;
     case t_sym: os << "Sym"; break;
@@ -80,18 +78,32 @@ std::ostream &operator<<(std::ostream &os, const asv::type t) {
     return os;
 }
 
-std::ostream &operator<<(std::ostream &os, const node &n) {
-    using enum asv::type;
+static void print_tnumber(std::ostream &os, const node &n) {
+    assert(n.type == asv::ntype::t_number);
+    switch(n.a.type.v) {
+        case rtype::a_i8: os << n.a.a_i8; break;
+        case rtype::a_i16: os << n.a.a_i16; break;
+        case rtype::a_i32: os << n.a.a_i32; break;
+        case rtype::a_i64: os << n.a.a_i64; break;
+        case rtype::a_f16: os << static_cast<float>(n.a.a_f16); break;
+        case rtype::a_bf16: os << static_cast<float>(n.a.a_bf16); break;
+        case rtype::a_f32: os << n.a.a_f32; break;
+        case rtype::a_f64: os << n.a.a_f64; break;
+        default: assert(false);
+    }
+}
 
-    os << "Node<" << n.typ << ">";
+std::ostream &operator<<(std::ostream &os, const node &n) {
+    using enum asv::ntype;
+
+    os << "Node<" << n.type << ">";
     os << "(" << n.pos << ")[";
-    switch (n.typ) {
+    switch (n.type) {
     case t_ident:
     case t_sym:
     case t_comment:
     case t_str: os << *n.s; break;
-    case t_int: os << n.a.a_i64; break;
-    case t_float: os << n.a.a_f32; break;
+    case t_number: print_tnumber(os, n); break;
     case t_adverb: os << adverbs[n.a.a_char]; break;
     case t_parlist:
     case t_bracketlist:
@@ -220,7 +232,7 @@ unsigned reader::parse_number(unsigned pos, node &n) {
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "i8");
         if (val > 127 || val < -128)
             throw parse_error("i8 overflow", pos);
-        n.typ = type::t_int;
+        n.type = ntype::t_number;
         n.pos = pos;
         n.a = atom(rtype::a_i8, static_cast<int8_t>(val));
         break;
@@ -228,7 +240,7 @@ unsigned reader::parse_number(unsigned pos, node &n) {
     case rtype::a_i16: {
         int16_t val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "i16");
-        n.typ = type::t_int;
+        n.type = ntype::t_number;
         n.pos = pos;
         n.a = atom(rtype::a_i16, val);
         break;
@@ -236,7 +248,7 @@ unsigned reader::parse_number(unsigned pos, node &n) {
     case rtype::a_i32: {
         int32_t val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "i32");
-        n.typ = type::t_int;
+        n.type = ntype::t_number;
         n.pos = pos;
         n.a = atom(rtype::a_i32, val);
         break;
@@ -244,7 +256,7 @@ unsigned reader::parse_number(unsigned pos, node &n) {
     case rtype::a_i64: {
         int64_t val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "i64");
-        n.typ = type::t_int;
+        n.type = ntype::t_number;
         n.pos = pos;
         n.a = atom(rtype::a_i64, val);
         break;
@@ -252,7 +264,7 @@ unsigned reader::parse_number(unsigned pos, node &n) {
     case rtype::a_f32: {
         float val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "f32");
-        n.typ = type::t_float;
+        n.type = ntype::t_number;
         n.pos = pos;
         n.a = atom(rtype::a_f32, val);
         break;
@@ -260,7 +272,7 @@ unsigned reader::parse_number(unsigned pos, node &n) {
     case rtype::a_f64: {
         double val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "f64");
-        n.typ = type::t_float;
+        n.type = ntype::t_number;
         n.pos = pos;
         n.a = atom(rtype::a_f64, val);
         break;
@@ -269,7 +281,7 @@ unsigned reader::parse_number(unsigned pos, node &n) {
         // No from_chars overload for _Float16; parse as double then narrow.
         double val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "f16");
-        n.typ = type::t_float;
+        n.type = ntype::t_number;
         n.pos = pos;
         n.a = atom(rtype::a_f16, static_cast<float16_t>(val));
         break;
@@ -277,7 +289,7 @@ unsigned reader::parse_number(unsigned pos, node &n) {
     case rtype::a_bf16: {
         double val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "bf16");
-        n.typ = type::t_float;
+        n.type = ntype::t_number;
         n.pos = pos;
         n.a = atom(rtype::a_bf16, static_cast<bfloat16_t>(val));
         break;
@@ -295,7 +307,7 @@ unsigned reader::parse_str(unsigned pos, node &n) {
     unsigned p = pos + 1;
     while (has_more(p)) {
         if (sv[p] == '"' && sv[p - 1] != '\\') {
-            n = node(asv::type::t_str, pos, new std::string(sv, pos + 1, p - pos - 1));
+            n = node(asv::ntype::t_str, pos, new std::string(sv, pos + 1, p - pos - 1));
             return p + 1;
         }
         p += 1;
@@ -308,7 +320,7 @@ unsigned reader::parse_ident(unsigned pos, node &n) {
     if (!is_ident1char(sv[p])) return no_parse;
     while (has_more(p) && is_identchar(sv[p]))
         p += 1;
-    n = node(asv::type::t_ident, pos, new std::string(sv, pos, p - pos));
+    n = node(asv::ntype::t_ident, pos, new std::string(sv, pos, p - pos));
     return p;
 }
 
@@ -319,7 +331,7 @@ unsigned reader::parse_comment(unsigned pos, node &n) {
     int p = pos + 1;
     while (has_more(p) && p != '\n')
         p += 1;
-    n = node(asv::type::t_comment, pos, new std::string(sv, pos, p - pos));
+    n = node(asv::ntype::t_comment, pos, new std::string(sv, pos, p - pos));
     return p;
 }
 
@@ -335,14 +347,14 @@ unsigned reader::parse_sym(unsigned pos, node &n) {
         p = parse_ident(p, n);
     else
         return no_parse;
-    n.typ = asv::type::t_sym;
+    n.type = asv::ntype::t_sym;
     return p;
 }
 
 unsigned reader::parse_oper(unsigned pos, node &n) {
     char c = sv[pos];
     if (!oper_table.at(static_cast<unsigned>(c))) return no_parse;
-    n = node(asv::type::t_oper, pos, c);
+    n = node(asv::ntype::t_oper, pos, c);
     return pos + 1;
 }
 
@@ -350,7 +362,7 @@ unsigned reader::parse_adverb(unsigned pos, node &n) {
     auto sv_pos = sv.substr(pos);
     for (unsigned i = 0; i < adverbs.size(); ++i) {
         if (!sv_pos.starts_with(adverbs[i])) continue;
-        n = node(asv::type::t_adverb, pos, static_cast<int64_t>(i));
+        n = node(asv::ntype::t_adverb, pos, static_cast<int64_t>(i));
         return pos + adverbs[i].size();
     }
     return no_parse;
@@ -359,7 +371,7 @@ unsigned reader::parse_adverb(unsigned pos, node &n) {
 unsigned reader::parse_term(unsigned pos, node &n) {
     char c = pos >= sv.size() ? 0 : sv[pos];
     if (!(is_term(c) || is_rightgroup(c))) return no_parse;
-    n = node(asv::type::t_term, pos, c);
+    n = node(asv::ntype::t_term, pos, c);
     return pos + 1;
 }
 
@@ -387,12 +399,12 @@ unsigned reader::parse_func(unsigned pos, node &n) {
     if (ret == no_parse) throw parse_error("expecting fn body", p);
     p = ret;
 
-    n = node(asv::type::t_func, pos, fn);
+    n = node(asv::ntype::t_func, pos, fn);
     return p;
 }
 
 unsigned reader::parse_funcparams(unsigned pos, node &n) {
-    using enum asv::type;
+    using enum asv::ntype;
 
     vector<node> params;
     node         bn;
@@ -407,7 +419,7 @@ unsigned reader::parse_funcparams(unsigned pos, node &n) {
             }
         }
         for (unsigned i = 0; i < params.size(); ++i) {
-            if (params[i].typ != t_ident && params[i].typ != t_term)
+            if (params[i].type != t_ident && params[i].type != t_term)
                 throw parse_error("bad type in param list", params[i].pos);
         }
         n = node(t_bracketlist, pos, new vector<node>(std::move(params)));
@@ -425,7 +437,7 @@ unsigned reader::match_next(unsigned pos, std::string_view x) {
     return end;
 }
 
-unsigned reader::parse_group(unsigned pos, node &n, asv::type type, char open, char close) {
+unsigned reader::parse_group(unsigned pos, node &n, asv::ntype type, char open, char close) {
     unsigned p = pos;
     if (sv[p] != open) return no_parse;
     p += 1;
@@ -436,7 +448,7 @@ unsigned reader::parse_group(unsigned pos, node &n, asv::type type, char open, c
         node child;
         p = skip_ws(p);
         p = parse_expr(p, child);
-        assert(child.n->back().typ == asv::type::t_term);
+        assert(child.n->back().type == asv::ntype::t_term);
         char found = p == no_parse ? 0 : child.n->back().a.a_char;
         if (found == ';' || found == '\n' || found == close) {
             list->emplace_back(std::move(child));
@@ -456,13 +468,13 @@ unsigned reader::parse_group(unsigned pos, node &n, asv::type type, char open, c
 }
 
 unsigned reader::parse_parlist(unsigned pos, node &n) {
-    return parse_group(pos, n, asv::type::t_parlist, '(', ')');
+    return parse_group(pos, n, asv::ntype::t_parlist, '(', ')');
 }
 unsigned reader::parse_bracketlist(unsigned pos, node &n) {
-    return parse_group(pos, n, asv::type::t_bracketlist, '[', ']');
+    return parse_group(pos, n, asv::ntype::t_bracketlist, '[', ']');
 }
 unsigned reader::parse_bracelist(unsigned pos, node &n) {
-    return parse_group(pos, n, asv::type::t_bracelist, '{', '}');
+    return parse_group(pos, n, asv::ntype::t_bracelist, '{', '}');
 }
 
 unsigned reader::parse_toplevel(unsigned pos, node &n) {
@@ -486,7 +498,7 @@ unsigned reader::parse_toplevel(unsigned pos, node &n) {
         p = ret;
         p = skip_ws(p);
     }
-    n = node(asv::type::t_toplevel, start, v);
+    n = node(asv::ntype::t_toplevel, start, v);
     return p;
 }
 
@@ -517,7 +529,7 @@ unsigned reader::parse_expr(unsigned pos, node &n) {
         if (ret != no_parse) goto bottom;
         ret = parse_func(p, child);
         if (ret != no_parse) {
-            if (child.f->name.typ == asv::type::t_ident)
+            if (child.f->name.type == asv::ntype::t_ident)
                 throw parse_error("Named functions only at top level", p);
             goto bottom;
         }
@@ -539,19 +551,19 @@ unsigned reader::parse_expr(unsigned pos, node &n) {
         p = ret;
         p = skip_ws(p);
     }
-    n = node(asv::type::t_expr, start, v);
+    n = node(asv::ntype::t_expr, start, v);
     return p;
 }
 
 void pretty_print(node &n, int level, char const *prefix) {
-    using enum asv::type;
+    using enum asv::ntype;
 
     for (int i = 0; i < level; ++i)
         std::cout << "  ";
 
     std::cout << prefix << n << std::endl;
 
-    switch (n.typ) {
+    switch (n.type) {
     case t_func: {
         pretty_print(n.f->name, level + 1, "name: ");
         pretty_print(n.f->params, level + 1, "params: ");
@@ -568,6 +580,24 @@ void pretty_print(node &n, int level, char const *prefix) {
         break;
     }
     default: break;
+    }
+}
+
+static void nums_to_vec(vector<node> &ns, unsigned i) {
+    vector<rtype> rtypes;
+    rtype largest = rtype::a_i8;
+    unsigned end = i;
+    while(end < ns.size() && ns[end].type == asv::ntype::t_number) {
+        largest = ns[end].a.type.to_int() > largest.to_int() ? ns[end].a.type : largest;
+    }
+   // STOPPED HERE
+}
+
+void optpass_vecs(vector<node> &ns) {
+    for(unsigned i = 0; i < ns.size(); ++i) {
+        if(ns[i].type == asv::ntype::t_number) {
+            nums_to_vec(ns,i);
+        }
     }
 }
 

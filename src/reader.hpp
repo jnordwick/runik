@@ -29,15 +29,14 @@ class parse_error : public std::runtime_error {
     char const *what() const noexcept override { return msg.c_str(); }
 };
 
-enum class type {
+enum class ntype {
     t_term,
     t_expr,
     t_parlist,
     t_bracketlist,
     t_bracelist,
     t_toplevel,
-    t_int,
-    t_float,
+    t_number,
     t_str,
     t_ident,
     t_oper,
@@ -48,7 +47,7 @@ enum class type {
 };
 
 struct node {
-    type     typ;
+    ntype     type;
     unsigned pos;
     union {
         atom               a;
@@ -57,31 +56,31 @@ struct node {
         func              *f;
     };
 
-    explicit node(enum type t, unsigned p, double x, rtype rt) : typ(t), pos(p), a(rt, x) {}
-    explicit node(enum type t, unsigned p, int64_t x, rtype rt) : typ(t), pos(p), a(rt, x) {}
-    explicit node(enum type t, unsigned p, double x) : typ(t), pos(p), a(rtype::a_f64, x) {}
-    explicit node(enum type t, unsigned p, int64_t x) : typ(t), pos(p), a(rtype::a_i64, x) {}
-    explicit node(enum type t, unsigned p, char x) : typ(t), pos(p), a(rtype::a_char, x) {}
+    explicit node(enum ntype t, unsigned p, double x, rtype rt) : type(t), pos(p), a(rt, x) {}
+    explicit node(enum ntype t, unsigned p, int64_t x, rtype rt) : type(t), pos(p), a(rt, x) {}
+    explicit node(enum ntype t, unsigned p, double x) : type(t), pos(p), a(rtype::a_f64, x) {}
+    explicit node(enum ntype t, unsigned p, int64_t x) : type(t), pos(p), a(rtype::a_i64, x) {}
+    explicit node(enum ntype t, unsigned p, char x) : type(t), pos(p), a(rtype::a_char, x) {}
 
-    explicit node(enum type t, unsigned p, std::string *x) : typ(t), pos(p), s(x) {}
-    explicit node(enum type t, unsigned p, std::vector<node> *x) : typ(t), pos(p), n(x) {}
-    explicit node(enum type t, unsigned p, func *x) : typ(t), pos(p), f(x) {}
+    explicit node(enum ntype t, unsigned p, std::string *x) : type(t), pos(p), s(x) {}
+    explicit node(enum ntype t, unsigned p, std::vector<node> *x) : type(t), pos(p), n(x) {}
+    explicit node(enum ntype t, unsigned p, func *x) : type(t), pos(p), f(x) {}
 
-    explicit node() : node(type::t_term, no_parse, '\0') {}
+    explicit node() : node(ntype::t_term, no_parse, '\0') {}
 
     node(const node &)            = delete;
     node &operator=(const node &) = delete;
 
     node(node &&other) noexcept {
-        this->typ = other.typ;
+        this->type = other.type;
         this->pos = other.pos;
         this->a   = other.a;
-        other.typ = type::t_term;
+        other.type = ntype::t_term;
     }
 
     node &operator=(node &&other) noexcept {
         if (this != &other) {
-            std::swap(this->typ, other.typ);
+            std::swap(this->type, other.type);
             std::swap(this->pos, other.pos);
             std::swap(this->a, other.a);
         }
@@ -107,7 +106,7 @@ struct reader {
     bool     has_more(unsigned p);
     unsigned skip_ws(unsigned p);
     unsigned match_next(unsigned pos, std::string_view x);
-    unsigned parse_group(unsigned pos, node &n, asv::type type, char open, char close);
+    unsigned parse_group(unsigned pos, node &n, asv::ntype type, char open, char close);
 
     unsigned parse_number(unsigned pos, node &n);
     unsigned parse_str(unsigned pos, node &n);
@@ -127,7 +126,7 @@ struct reader {
     unsigned parse_comment(unsigned pos, node &n);
 };
 
-std::ostream &operator<<(std::ostream &os, const asv::type t);
+std::ostream &operator<<(std::ostream &os, const asv::ntype t);
 std::ostream &operator<<(std::ostream &os, const node &n);
 
 void pretty_print(node &n, int level = 0, char const *prefix = "");

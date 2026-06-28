@@ -1,5 +1,4 @@
 #include <cstring>
-#include <vector>
 
 #include "mem.hpp"
 #include "runik.hpp"
@@ -15,7 +14,7 @@ vec *vec::make(rtype t, uint64_t n, uint32_t ref) {
     v->attr    = vattr::none;
     v->ref     = ref;
     v->cap     = u;
-    v->len     = n;
+    v->len     = 0;
     return v;
 }
 

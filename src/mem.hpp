@@ -39,7 +39,7 @@ inline void free_raw(void *v) { free(v); }
 
 inline header *alloc_header() {
     header *h = (header *)alloc_raw(sizeof(header));
-    std::memset(h, 0, sizeof(header));
+    std::memset(static_cast<void*>(h), 0, sizeof(header));
     return h;
 }
 
