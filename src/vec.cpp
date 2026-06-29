@@ -8,19 +8,17 @@
 namespace runik {
 
 std::ostream &operator<<(std::ostream &os, vec const &v) {
-    for (unsigned i = 0; i < v.len; ++i) {
-        switch (v.type.v) {
-        case rtype::v_i8: os << v.get<int8_t>(i) << " "; break;
-        case rtype::v_i16: os << v.get<int16_t>(i) << " "; break;
-        case rtype::v_i32: os << v.get<int32_t>(i) << " "; break;
-        case rtype::v_i64: os << v.get<int64_t>(i) << " "; break;
-        case rtype::v_f16: os << static_cast<float>(v.get<float16_t>(i)) << " "; break;
-        case rtype::v_bf16: os << static_cast<float>(v.get<bfloat16_t>(i)) << " "; break;
-        case rtype::v_f32: os << v.get<float>(i) << " "; break;
-        case rtype::v_f64: os << v.get<double>(i) << " "; break;
-        default: assert(false);
+    os << "vec[";
+    with_numeric_type(v.type.to_atom(), [&]<typename T>(std::type_identity<T>) {
+        for (unsigned i = 0; i < v.len; ++i) {
+            if (i != 0) os << " ";
+            if constexpr (std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>)
+                os << static_cast<float>(v.get<T>(i));
+            else
+                os << v.get<T>(i);
         }
-    }
+    });
+    os << ']';
     return os;
 }
 

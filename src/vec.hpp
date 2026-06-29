@@ -80,6 +80,13 @@ struct vec {
 } pack_align(8);
 static_assert(sizeof(vec) == 32);
 
+template <typename T, typename F>
+void for_each(vec const &v, F &&f) {
+    for (unsigned i = 0; i < v.len; ++i) {
+        f(i, v.get<T>(i));
+    }
+}
+
 std::ostream &operator<<(std::ostream &os, vec const &v);
 
 void vec_unmake(vec *v);

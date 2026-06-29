@@ -7,7 +7,7 @@ int main() {
     using namespace runik;
 
     test("vec") = [] {
-        vec *v = vec::make(rtype::v_i32, 16);
+        vec    *v   = vec::make(rtype::v_i32, 16);
         int32_t val = 10;
         expect(v->len == 0);
         expect(v->cap == 16);
@@ -21,5 +21,6 @@ int main() {
         expect(v->get<int32_t>(0) == 10);
         expect(v->get<int32_t>(1) == 11);
         expect(v->get<int32_t>(2) == 12);
+        std::cout << *v << std::endl;
     };
 }

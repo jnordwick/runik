@@ -592,21 +592,6 @@ void pretty_print(node &n, int level, char const *prefix) {
     }
 }
 
-template <typename F>
-static auto with_numeric_type(rtype t, F &&f) {
-    switch (t.v) {
-    case rtype::a_i8: return f(std::type_identity<int8_t>{});
-    case rtype::a_i16: return f(std::type_identity<int16_t>{});
-    case rtype::a_i32: return f(std::type_identity<int32_t>{});
-    case rtype::a_i64: return f(std::type_identity<int64_t>{});
-    case rtype::a_f16: return f(std::type_identity<float16_t>{});
-    case rtype::a_bf16: return f(std::type_identity<bfloat16_t>{});
-    case rtype::a_f32: return f(std::type_identity<float>{});
-    case rtype::a_f64: return f(std::type_identity<double>{});
-    default: assert(false); __builtin_unreachable();
-    }
-}
-
 template <typename Dest, typename Src>
 static Dest numeric_cast(Src v) {
     if constexpr (std::is_same_v<Dest, Src>) {
