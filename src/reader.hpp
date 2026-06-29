@@ -134,5 +134,6 @@ std::ostream &operator<<(std::ostream &os, const asv::ntype t);
 std::ostream &operator<<(std::ostream &os, const node &n);
 
 void pretty_print(node &n, int level = 0, char const *prefix = "");
+void optpass_veclit(std::vector<node> &ns);
 
 }   // namespace asv

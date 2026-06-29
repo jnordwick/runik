@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 #include <memory>   // IWYU pragma: keep
 #include <stdfloat>
 
@@ -248,7 +249,10 @@ static auto with_numeric_type(rtype t, F &&f) {
     case rtype::a_bf16: return f(std::type_identity<bfloat16_t>{});
     case rtype::a_f32: return f(std::type_identity<float>{});
     case rtype::a_f64: return f(std::type_identity<double>{});
-    default: assert(false); __builtin_unreachable();
+    default:
+        std::cerr << "type=" << t.v << std::endl;
+        assert(false);
+        __builtin_unreachable();
     }
 }
 

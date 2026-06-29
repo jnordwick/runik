@@ -51,10 +51,10 @@ node::~node() {
     case t_toplevel: delete n; break;
     case t_expr: delete n; break;
     case t_func: delete f; break;
+    case t_vec: v->dref(); break;
     case t_term:
     case t_number:
     case t_adverb:
-    case t_vec: v->dref(); break;
     case t_oper: break;
     }
 }
@@ -113,12 +113,12 @@ std::ostream &operator<<(std::ostream &os, const node &n) {
     case t_bracketlist:
     case t_bracelist:
     case t_toplevel:
-    case t_vec: {
-        os << n.v->len << "#" << *n.v;
-        break;
-    }
     case t_expr: {
         os << '#' << n.n->size();
+        break;
+    }
+    case t_vec: {
+        os << *n.v;
         break;
     }
     case t_func: {
@@ -623,19 +623,20 @@ static void nums_to_vec(vector<node> &ns, unsigned i) {
         largest  = ns[end].a.type.to_int() > largest.to_int() ? ns[end].a.type : largest;
         end     += 1;
     }
-    vec *v = vec::make(largest, end - i);
+    vec *v = vec::make(largest.to_vec(), end - i);
     for (unsigned j = i; j < end; ++j) {
-        atom a = ns[j].a;
-        convert_numeric(largest, v->head() + j * largest.size_class(), ns[j].a.type, &a.data_);
+        atom &a = ns[j].a;
+        convert_numeric(largest, v->head() + (j - i) * largest.size_class(), a.type, &a.data_);
     }
-    ns.erase(ns.begin() + i, ns.begin() + end);
+    v->len = end - i;
+    ns.erase(ns.begin() + i + 1, ns.begin() + end);
     ns[i].type = ntype::t_vec;
     ns[i].v    = v;
 
     return;
 }
 
-void optpass_vecs(vector<node> &ns) {
+void optpass_veclit(vector<node> &ns) {
     for (unsigned i = 0; i < ns.size(); ++i) {
         if (ns[i].type == ntype::t_number) {
             nums_to_vec(ns, i);

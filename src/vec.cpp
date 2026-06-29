@@ -8,7 +8,7 @@
 namespace runik {
 
 std::ostream &operator<<(std::ostream &os, vec const &v) {
-    os << "vec[";
+    os << "vec#" << v.len << "[";
     with_numeric_type(v.type.to_atom(), [&]<typename T>(std::type_identity<T>) {
         for (unsigned i = 0; i < v.len; ++i) {
             if (i != 0) os << " ";
