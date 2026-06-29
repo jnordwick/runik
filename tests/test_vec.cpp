@@ -1,5 +1,6 @@
 #include "boost/ut.hpp"
 #include "runik.hpp"
+#include "vec.hpp"
 
 int main() {
     using namespace boost::ut;

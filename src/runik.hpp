@@ -2,9 +2,9 @@
 
 #include <cassert>
 #include <cstdint>
+#include <cstring>
 #include <memory>   // IWYU pragma: keep
 #include <stdfloat>
-#include <cstring>
 
 #define pack_align(x) __attribute__((__packed__, __aligned__(x)))
 #define vec_align(x)  std::assume_aligned<data_align>(x)
@@ -45,18 +45,18 @@ struct rtype {
     rtype() {}
     rtype(rtype::t x) : v(x) {}
     rtype(uint8_t x) : v(static_cast<rtype::t>(x)) {}
-    uint32_t to_int() { return static_cast<uint32_t>(v); }
+    uint32_t to_int() const { return static_cast<uint32_t>(v); }
 
-    auto operator<=> (const rtype &x) const = default;
+    auto operator<=>(const rtype &x) const = default;
 
-    rtype to_atom() { return v & ~0xc0; }
-    rtype to_vec() { return to_atom().to_int() | 0x80; }
-    rtype as_mat() { return to_atom().to_int() | 0x40; }
-    rtype as_ten() { return to_int() | 0xc0; }
-    bool  is_atom() { return 0 == (to_int() & 0xc0); }
-    bool  is_vec() { return 0x80 == (to_int() & 0xc0); }
-    bool  is_mat() { return 0x40 == (to_int() & 0xc0); }
-    bool  is_ten() { return 0xc0 == (to_int() & 0xc0); }
+    rtype to_atom() const { return v & ~0xc0; }
+    rtype to_vec() const { return to_atom().to_int() | 0x80; }
+    rtype as_mat() const { return to_atom().to_int() | 0x40; }
+    rtype as_ten() const { return to_int() | 0xc0; }
+    bool  is_atom() const { return 0 == (to_int() & 0xc0); }
+    bool  is_vec() const { return 0x80 == (to_int() & 0xc0); }
+    bool  is_mat() const { return 0x40 == (to_int() & 0xc0); }
+    bool  is_ten() const { return 0xc0 == (to_int() & 0xc0); }
 
     unsigned size_class() {
         switch (to_atom().to_int()) {
@@ -109,6 +109,7 @@ struct atom {
     uint8_t pad_[7] = {};
 
     union {
+        char       data_[8];
         rune      *a_rune;
         sym        a_sym;
         nano       a_nano;
@@ -174,102 +175,15 @@ struct vattr {
 } pack_align(1);
 static_assert(sizeof(vattr) == 1);
 
-struct vec {
-    rtype    type;
-    vattr    attr;
-    uint8_t  pad1_[2];
-    uint16_t ref;
-    uint8_t  pad2_[2];
-    uint64_t cap;
-    uint64_t len;
-    union {
-        void       *v_void;
-        atom       *v_atom;
-        sym        *v_sym;
-        nano       *v_nano;
-        bit        *v_bit;
-        int8_t     *a_i8;
-        int16_t    *v_i16;
-        int32_t    *v_i32;
-        int64_t    *v_i64;
-        uint8_t    *v_char;
-        uint8_t    *v_u8;
-        uint16_t   *v_u16;
-        uint32_t   *v_u32;
-        uint64_t   *v_u64;
-        bfloat16_t *v_bf16;
-        float16_t  *v_f16;
-        float      *v_f32;
-        double     *v_f64;
-    } pack_align(8);
-
-    template <typename T>
-    T &get(uint64_t x = 0) {
-        return static_cast<T *>(v_void)[x];
-    }
-
-    template <typename T>
-    T const &get(uint64_t x = 0) const {
-        return static_cast<T const *>(v_void)[x];
-    }
-
-    char* head() {
-        return static_cast<char *>(v_void);
-    }
-
-    char* tail() {
-        return head() + len * type.size_class();
-    }
-
-    static vec *make(rtype t, uint64_t n, uint32_t ref = 0);
-    static vec *make(vec *old, uint64_t extra);
-    static void unmake(vec *v);
-    static vec *from(rtype t, void *v, size_t nmem);
-
-
-    void ensure(uint64_t x) {
-        if (x > cap) grow(x);
-    }
-    void more(uint64_t x) { ensure(len + x); }
-
-    vec *uref() {
-        ref += 1;
-        return this;
-    }
-
-    void dref() {
-        if (ref > 0) {
-            if (--ref == 0) unmake(this);
-        }
-    }
-
-    void append(void *dat, uint64_t s=1) {
-        more(s);
-        std::memcpy(tail(), dat, s * type.size_class());
-        len += s;
-    }
-
-   private:
-     __attribute__((__cold__)) void grow(uint64_t new_cap);
-    vec() {}
-
-} pack_align(8);
-static_assert(sizeof(vec) == 32);
+struct vec;
+void vec_unmake(vec *v);
 
 struct rune {
-    union {
-        rtype t;
-        atom  a;
-        vec   v;
-    } pack_align(8);
+    rtype    t;
+    uint16_t ref;
+    uint8_t  pad1_[1];
 
     rtype type() { return t; }
-
-    // only ever rederence this by a pointer
-    rune()             = delete;
-    ~rune()            = delete;
-    rune(rune const &) = delete;
-    rune(rune &&)      = delete;
 
     atom *as_atom() {
         assert(t.is_atom());
@@ -283,12 +197,15 @@ struct rune {
 
     rune *uref() {
         assert(t.is_vec());
-        return reinterpret_cast<rune *>(as_vec()->uref());
+        ref += 1;
+        return this;
     }
 
     void dref() {
         assert(t.is_vec());
-        as_vec()->dref();
+        if (ref > 0) {
+            if (--ref == 0) vec_unmake(reinterpret_cast<vec *>(this));
+        }
     }
 };
 
@@ -304,13 +221,19 @@ struct mattr {
 
 struct mat {
     rtype    type;
-    mattr    attr;
-    uint8_t  pad1_[2];
     uint16_t ref;
-    uint8_t  pad2_[2];
+    uint8_t  pad1_[1];
+    mattr    attr;
+    uint8_t  pad2_[3];
     uint64_t xdim;
     uint64_t ydim;
-    void    *data;
+    union {
+        void       *data;
+        float16_t  *v_16f;
+        bfloat16_t *v_b16f;
+        float      *v_32f;
+        double     *v_64f;
+    } pack_align(8);
 } pack_align(8);
 static_assert(sizeof(mat) == 32);
 

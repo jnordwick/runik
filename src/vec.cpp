@@ -1,9 +1,28 @@
+#include "vec.hpp"
+
 #include <cstring>
 
 #include "mem.hpp"
 #include "runik.hpp"
 
 namespace runik {
+
+std::ostream &operator<<(std::ostream &os, vec const &v) {
+    for (unsigned i = 0; i < v.len; ++i) {
+        switch (v.type.v) {
+        case rtype::v_i8: os << v.get<int8_t>(i) << " "; break;
+        case rtype::v_i16: os << v.get<int16_t>(i) << " "; break;
+        case rtype::v_i32: os << v.get<int32_t>(i) << " "; break;
+        case rtype::v_i64: os << v.get<int64_t>(i) << " "; break;
+        case rtype::v_f16: os << static_cast<float>(v.get<float16_t>(i)) << " "; break;
+        case rtype::v_bf16: os << static_cast<float>(v.get<bfloat16_t>(i)) << " "; break;
+        case rtype::v_f32: os << v.get<float>(i) << " "; break;
+        case rtype::v_f64: os << v.get<double>(i) << " "; break;
+        default: assert(false);
+        }
+    }
+    return os;
+}
 
 vec *vec::make(rtype t, uint64_t n, uint32_t ref) {
     assert(t.is_vec());
@@ -25,7 +44,7 @@ vec *vec::make(vec *old, uint64_t extra) {
     return v;
 }
 
-void vec::unmake(vec *v) {
+void vec_unmake(vec *v) {
     if (v->type == rtype::v_gen) {
         for (uint64_t i = 0; i < v->len; ++i) {
             atom *a = v->v_atom;

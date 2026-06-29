@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "runik.hpp"
+#include "vec.hpp"
 
 namespace asv {
 
@@ -37,6 +38,7 @@ enum class ntype {
     t_bracelist,
     t_toplevel,
     t_number,
+    t_vec,
     t_str,
     t_ident,
     t_oper,
@@ -47,10 +49,11 @@ enum class ntype {
 };
 
 struct node {
-    ntype     type;
+    ntype    type;
     unsigned pos;
     union {
         atom               a;
+        vec               *v;
         std::string       *s;
         std::vector<node> *n;
         func              *f;
@@ -61,6 +64,7 @@ struct node {
     explicit node(enum ntype t, unsigned p, double x) : type(t), pos(p), a(rtype::a_f64, x) {}
     explicit node(enum ntype t, unsigned p, int64_t x) : type(t), pos(p), a(rtype::a_i64, x) {}
     explicit node(enum ntype t, unsigned p, char x) : type(t), pos(p), a(rtype::a_char, x) {}
+    explicit node(enum ntype t, unsigned p, vec *x) : type(t), pos(p), v(x) {}
 
     explicit node(enum ntype t, unsigned p, std::string *x) : type(t), pos(p), s(x) {}
     explicit node(enum ntype t, unsigned p, std::vector<node> *x) : type(t), pos(p), n(x) {}
@@ -73,8 +77,8 @@ struct node {
 
     node(node &&other) noexcept {
         this->type = other.type;
-        this->pos = other.pos;
-        this->a   = other.a;
+        this->pos  = other.pos;
+        this->a    = other.a;
         other.type = ntype::t_term;
     }
 

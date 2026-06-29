@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "runik.hpp"
+#include "vec.hpp"
 
 // This is just to get going, will fill it later.
 

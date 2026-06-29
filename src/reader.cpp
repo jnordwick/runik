@@ -7,11 +7,13 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
-
-#include <utility>
 #include <string_view>
+#include <type_traits>
+#include <utility>
 #include <vector>
+
 #include "runik.hpp"
+#include "vec.hpp"
 
 namespace asv {
 
@@ -51,7 +53,8 @@ node::~node() {
     case t_func: delete f; break;
     case t_term:
     case t_number:
-     case t_adverb:
+    case t_adverb:
+    case t_vec: v->dref(); break;
     case t_oper: break;
     }
 }
@@ -74,22 +77,23 @@ std::ostream &operator<<(std::ostream &os, const asv::ntype t) {
     case t_str: os << "Str"; break;
     case t_term: os << "Term"; break;
     case t_sym: os << "Sym"; break;
+    case t_vec: os << "Vec"; break;
     }
     return os;
 }
 
 static void print_tnumber(std::ostream &os, const node &n) {
     assert(n.type == asv::ntype::t_number);
-    switch(n.a.type.v) {
-        case rtype::a_i8: os << n.a.a_i8; break;
-        case rtype::a_i16: os << n.a.a_i16; break;
-        case rtype::a_i32: os << n.a.a_i32; break;
-        case rtype::a_i64: os << n.a.a_i64; break;
-        case rtype::a_f16: os << static_cast<float>(n.a.a_f16); break;
-        case rtype::a_bf16: os << static_cast<float>(n.a.a_bf16); break;
-        case rtype::a_f32: os << n.a.a_f32; break;
-        case rtype::a_f64: os << n.a.a_f64; break;
-        default: assert(false);
+    switch (n.a.type.v) {
+    case rtype::a_i8: os << n.a.a_i8; break;
+    case rtype::a_i16: os << n.a.a_i16; break;
+    case rtype::a_i32: os << n.a.a_i32; break;
+    case rtype::a_i64: os << n.a.a_i64; break;
+    case rtype::a_f16: os << static_cast<float>(n.a.a_f16); break;
+    case rtype::a_bf16: os << static_cast<float>(n.a.a_bf16); break;
+    case rtype::a_f32: os << n.a.a_f32; break;
+    case rtype::a_f64: os << n.a.a_f64; break;
+    default: assert(false);
     }
 }
 
@@ -109,6 +113,10 @@ std::ostream &operator<<(std::ostream &os, const node &n) {
     case t_bracketlist:
     case t_bracelist:
     case t_toplevel:
+    case t_vec: {
+        os << n.v->len << "#" << *n.v;
+        break;
+    }
     case t_expr: {
         os << '#' << n.n->size();
         break;
@@ -151,70 +159,73 @@ unsigned inline reader::skip_ws(unsigned p) {
 unsigned reader::parse_number(unsigned pos, node &n) {
     assert(pos < sv.size());
 
-    unsigned p         = pos;
-    int      dot_count = 0;
+    unsigned     p         = pos;
+    int          dot_count = 0;
     vector<char> clean;
 
-    if(sv[p] == '-') {
+    if (sv[p] == '-') {
         clean.push_back('-');
         p += 1;
     }
 
-    if(p >= sv.size() || !is_num(sv[p]))
-        return no_parse;
+    if (p >= sv.size() || !is_num(sv[p])) return no_parse;
 
     while (p < sv.size()) {
         char c = sv[p];
         if (is_num(c)) {
             clean.push_back(c);
             p++;
-        } else if (c == '.') {
+        }
+        else if (c == '.') {
             dot_count++;
             clean.push_back(c);
             p++;
-        } else if (c == '_') {
-            p++;  // skip; don't store
-        } else {
+        }
+        else if (c == '_') {
+            p++;   // skip; don't store
+        }
+        else {
             break;
         }
     }
 
-    if (dot_count > 1)
-        throw parse_error("too many dots in number", pos);
-    if (*clean.end() == '.')
-        throw parse_error("bad number format", pos);
+    if (dot_count > 1) throw parse_error("too many dots in number", pos);
+    if (*clean.end() == '.') throw parse_error("bad number format", pos);
 
     // Default type inferred from shape of literal
     rtype::t typ = dot_count == 1 ? rtype::a_f64 : rtype::a_i64;
 
     std::string_view trail = sv.substr(p);
     if (p < sv.size() && is_alpha(sv[p])) {
-        struct Suf { std::string_view s; rtype::t t; };
+        struct Suf {
+            std::string_view s;
+            rtype::t         t;
+        };
         // Longer entries first so "bf16" beats a hypothetical "b" prefix.
         static constexpr Suf suffixes[] = {
             {"bf16", rtype::a_bf16},
-            {"f64",  rtype::a_f64 },
-            {"f32",  rtype::a_f32 },
-            {"f16",  rtype::a_f16 },
-            {"i64",  rtype::a_i64 },
-            {"i32",  rtype::a_i32 },
-            {"i16",  rtype::a_i16 },
-            {"i8",   rtype::a_i8  },
+            { "f64",  rtype::a_f64},
+            { "f32",  rtype::a_f32},
+            { "f16",  rtype::a_f16},
+            { "i64",  rtype::a_i64},
+            { "i32",  rtype::a_i32},
+            { "i16",  rtype::a_i16},
+            {  "i8",   rtype::a_i8},
         };
 
         for (auto &[s, t] : suffixes) {
-            if(!trail.starts_with(s)) continue;
-            typ     = t;
-            p       += s.size();
+            if (!trail.starts_with(s)) continue;
+            typ  = t;
+            p   += s.size();
             break;
         }
-        if(p < sv.size() && is_identchar(sv[p]))
+        if (p < sv.size() && is_identchar(sv[p]))
             throw parse_error("unknown number type suffix", pos);
     }
 
     // Catch e.g. 12.5_i32 — truncation vs. error is a design call
-    bool is_float_type = (typ == rtype::a_f16  || typ == rtype::a_f32 ||
-                          typ == rtype::a_f64  || typ == rtype::a_bf16);
+    bool is_float_type =
+        (typ == rtype::a_f16 || typ == rtype::a_f32 || typ == rtype::a_f64 || typ == rtype::a_bf16);
     if (dot_count == 1 && !is_float_type)
         throw parse_error("decimal literal with integer suffix", pos);
 
@@ -230,51 +241,50 @@ unsigned reader::parse_number(unsigned pos, node &n) {
     case rtype::a_i8: {
         int val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "i8");
-        if (val > 127 || val < -128)
-            throw parse_error("i8 overflow", pos);
+        if (val > 127 || val < -128) throw parse_error("i8 overflow", pos);
         n.type = ntype::t_number;
-        n.pos = pos;
-        n.a = atom(rtype::a_i8, static_cast<int8_t>(val));
+        n.pos  = pos;
+        n.a    = atom(rtype::a_i8, static_cast<int8_t>(val));
         break;
     }
     case rtype::a_i16: {
         int16_t val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "i16");
         n.type = ntype::t_number;
-        n.pos = pos;
-        n.a = atom(rtype::a_i16, val);
+        n.pos  = pos;
+        n.a    = atom(rtype::a_i16, val);
         break;
     }
     case rtype::a_i32: {
         int32_t val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "i32");
         n.type = ntype::t_number;
-        n.pos = pos;
-        n.a = atom(rtype::a_i32, val);
+        n.pos  = pos;
+        n.a    = atom(rtype::a_i32, val);
         break;
     }
     case rtype::a_i64: {
         int64_t val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "i64");
         n.type = ntype::t_number;
-        n.pos = pos;
-        n.a = atom(rtype::a_i64, val);
+        n.pos  = pos;
+        n.a    = atom(rtype::a_i64, val);
         break;
     }
     case rtype::a_f32: {
         float val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "f32");
         n.type = ntype::t_number;
-        n.pos = pos;
-        n.a = atom(rtype::a_f32, val);
+        n.pos  = pos;
+        n.a    = atom(rtype::a_f32, val);
         break;
     }
     case rtype::a_f64: {
         double val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "f64");
         n.type = ntype::t_number;
-        n.pos = pos;
-        n.a = atom(rtype::a_f64, val);
+        n.pos  = pos;
+        n.a    = atom(rtype::a_f64, val);
         break;
     }
     case rtype::a_f16: {
@@ -282,20 +292,19 @@ unsigned reader::parse_number(unsigned pos, node &n) {
         double val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "f16");
         n.type = ntype::t_number;
-        n.pos = pos;
-        n.a = atom(rtype::a_f16, static_cast<float16_t>(val));
+        n.pos  = pos;
+        n.a    = atom(rtype::a_f16, static_cast<float16_t>(val));
         break;
     }
     case rtype::a_bf16: {
         double val;
         chk(std::from_chars(clean.data(), clean.data() + clean.size(), val).ec, "bf16");
         n.type = ntype::t_number;
-        n.pos = pos;
-        n.a = atom(rtype::a_bf16, static_cast<bfloat16_t>(val));
+        n.pos  = pos;
+        n.a    = atom(rtype::a_bf16, static_cast<bfloat16_t>(val));
         break;
     }
-    default:
-        assert(false);  // unreachable: typ is always set to a valid atom rtype above
+    default: assert(false);   // unreachable: typ is always set to a valid atom rtype above
     }
 
     return p;
@@ -506,9 +515,9 @@ unsigned reader::parse_expr(unsigned pos, node &n) {
     unsigned p = skip_ws(pos);
     if (!has_more(p)) return no_parse;
 
-    unsigned      start  = p;
-    vector<node> *v      = new vector<node>();
-    bool          done   = false;
+    unsigned      start = p;
+    vector<node> *v     = new vector<node>();
+    bool          done  = false;
 
     while (has_more(p) && !done) {
         node     child;
@@ -541,8 +550,8 @@ unsigned reader::parse_expr(unsigned pos, node &n) {
         if (ret != no_parse) goto bottom;
         ret = parse_ident(p, child);
         if (ret != no_parse) goto bottom;
-            ret = parse_adverb(p, child);
-            if (ret != no_parse) goto bottom;
+        ret = parse_adverb(p, child);
+        if (ret != no_parse) goto bottom;
         ret = parse_oper(p, child);
         if (ret != no_parse) goto bottom;
         throw parse_error("unknown token", p);
@@ -583,20 +592,68 @@ void pretty_print(node &n, int level, char const *prefix) {
     }
 }
 
-static void nums_to_vec(vector<node> &ns, unsigned i) {
-    vector<rtype> rtypes;
-    rtype largest = rtype::a_i8;
-    unsigned end = i;
-    while(end < ns.size() && ns[end].type == asv::ntype::t_number) {
-        largest = ns[end].a.type.to_int() > largest.to_int() ? ns[end].a.type : largest;
+template <typename F>
+static auto with_numeric_type(rtype t, F &&f) {
+    switch (t.v) {
+    case rtype::a_i8: return f(std::type_identity<int8_t>{});
+    case rtype::a_i16: return f(std::type_identity<int16_t>{});
+    case rtype::a_i32: return f(std::type_identity<int32_t>{});
+    case rtype::a_i64: return f(std::type_identity<int64_t>{});
+    case rtype::a_f16: return f(std::type_identity<float16_t>{});
+    case rtype::a_bf16: return f(std::type_identity<bfloat16_t>{});
+    case rtype::a_f32: return f(std::type_identity<float>{});
+    case rtype::a_f64: return f(std::type_identity<double>{});
+    default: assert(false); __builtin_unreachable();
     }
-   // STOPPED HERE
+}
+
+template <typename Dest, typename Src>
+static Dest numeric_cast(Src v) {
+    if constexpr (std::is_same_v<Dest, Src>) {
+        return v;
+    }
+    else if constexpr ((std::is_same_v<Src, float16_t> || std::is_same_v<Src, bfloat16_t>) ||
+                       (std::is_same_v<Dest, float16_t> || std::is_same_v<Dest, bfloat16_t>))
+    {
+        return static_cast<Dest>(static_cast<float>(v));
+    }
+    else {
+        return static_cast<Dest>(v);
+    }
+}
+
+static void convert_numeric(rtype dest_t, void *dest_p, rtype src_t, void const *src_p) {
+    with_numeric_type(dest_t, [&]<typename Dest>(std::type_identity<Dest>) {
+        with_numeric_type(src_t, [&]<typename Src>(std::type_identity<Src>) {
+            *static_cast<Dest *>(dest_p) = numeric_cast<Dest>(*static_cast<Src const *>(src_p));
+        });
+    });
+}
+
+static void nums_to_vec(vector<node> &ns, unsigned i) {
+    if (i == ns.size() - 1 || ns[i + 1].type != asv::ntype::t_number) return;
+    rtype    largest = rtype::a_i8;
+    unsigned end     = i;
+    while (end < ns.size() && ns[end].type == asv::ntype::t_number) {
+        largest  = ns[end].a.type.to_int() > largest.to_int() ? ns[end].a.type : largest;
+        end     += 1;
+    }
+    vec *v = vec::make(largest, end - i);
+    for (unsigned j = i; j < end; ++j) {
+        atom a = ns[j].a;
+        convert_numeric(largest, v->head() + j * largest.size_class(), ns[j].a.type, &a.data_);
+    }
+    ns.erase(ns.begin() + i, ns.begin() + end);
+    ns[i].type = ntype::t_vec;
+    ns[i].v    = v;
+
+    return;
 }
 
 void optpass_vecs(vector<node> &ns) {
-    for(unsigned i = 0; i < ns.size(); ++i) {
-        if(ns[i].type == asv::ntype::t_number) {
-            nums_to_vec(ns,i);
+    for (unsigned i = 0; i < ns.size(); ++i) {
+        if (ns[i].type == ntype::t_number) {
+            nums_to_vec(ns, i);
         }
     }
 }
