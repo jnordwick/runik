@@ -636,11 +636,26 @@ static void nums_to_vec(vector<node> &ns, unsigned i) {
     return;
 }
 
+void optpass_veclit(node &n);
+
 void optpass_veclit(vector<node> &ns) {
     for (unsigned i = 0; i < ns.size(); ++i) {
         if (ns[i].type == ntype::t_number) {
             nums_to_vec(ns, i);
         }
+        optpass_veclit(ns[i]);
+    }
+}
+
+void optpass_veclit(node &n) {
+    switch (n.type) {
+    case ntype::t_toplevel:
+    case ntype::t_expr:
+    case ntype::t_parlist:
+    case ntype::t_bracketlist:
+    case ntype::t_bracelist: optpass_veclit(*n.n); break;
+    case ntype::t_func: optpass_veclit(n.f->body); break;
+    default: break;
     }
 }
 
