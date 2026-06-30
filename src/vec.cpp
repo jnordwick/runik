@@ -26,7 +26,7 @@ vec *vec::make(rtype t, uint64_t n, uint32_t ref) {
     assert(t.is_vec());
     assert(n > 0);
     uint64_t u = block_round_up(t, n);
-    vec     *v = mem::allocv(u, t.size_class());
+    vec     *v = mem::alloc_vec(u, t.size_class());
     v->type    = t;
     v->attr    = vattr::none;
     v->ref     = ref;
@@ -43,12 +43,14 @@ vec *vec::make(vec *old, uint64_t extra) {
 }
 
 void vec_unmake(vec *v) {
+    assert(v->ref < 2);
     if (v->type == rtype::v_gen) {
         for (uint64_t i = 0; i < v->len; ++i) {
-            atom *a = v->v_atom;
-            if (a->type == rtype::a_gen) a->a_rune->dref();
+            atom &a = v->v_atom[i];
+            if (a.type == rtype::a_gen) a.a_rune->dref();
         }
     }
+    mem::free_vec(v);
 }
 
 __attribute__((__cold__)) void vec::grow(uint64_t new_cap) {

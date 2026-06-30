@@ -36,11 +36,11 @@ inline void *alloc_raw(size_t s) {
     return ::operator new(s);
 }
 
-inline void free_raw(void *v) { free(v); }
+inline void free_raw(void *v) { ::operator delete(v); }
 
 inline header *alloc_header() {
     header *h = (header *)alloc_raw(sizeof(header));
-    std::memset(static_cast<void*>(h), 0, sizeof(header));
+    std::memset(static_cast<void *>(h), 0, sizeof(header));
     return h;
 }
 
@@ -48,7 +48,7 @@ inline void free_header(header *h) { ::operator delete((void *)h); }
 
 inline void *alloc_data(size_t s) { return alloc_raw(s); }
 
-inline vec *allocv(size_t n, size_t s) {
+inline vec *alloc_vec(size_t n, size_t s) {
     uint64_t r = chk_mul(n, s);
     assert(r % block_size == 0);
     vec *v    = &alloc_header()->v;
@@ -56,7 +56,7 @@ inline vec *allocv(size_t n, size_t s) {
     return v;
 }
 
-inline void freev(vec *v) {
+inline void free_vec(vec *v) {
     free_raw(v->v_void);
     free_raw(v);
 }
